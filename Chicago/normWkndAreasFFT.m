@@ -42,4 +42,7 @@ for route = routes'
     
 end
 
+[normAreas, ii] = sort(normAreas, 1, 'descend');
+routes = routes(ii);
+
 end

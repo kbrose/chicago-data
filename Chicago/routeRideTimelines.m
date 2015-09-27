@@ -24,6 +24,7 @@ function [dates, rides] = routeRideTimelines(routeNums, data, toSmooth)
 % Kevin Rose
 % september, 2015
 
+%% input handling
 if nargin < 3 || isempty(toSmooth)
     toSmooth = false;
 end
@@ -32,7 +33,7 @@ if nargin < 2 || isempty(data)
     data = data.data;
 end
 if nargin < 1 || isempty(routeNums)
-    error('Need route Numbers');
+    routeNums = dec2base(unique(data(:,1)), 36);
 end
 
 if ~iscell(routeNums) && ~ischar(routeNums) || ...
@@ -44,32 +45,45 @@ if iscell(routeNums)
     routeNumLabels = routeNums;
     routeNums = cellfun(@(x) base2dec(x, 36), routeNums);
 else
-    routeNumLabels = strread(num2str(routeNums),'%s');
+    routeNumLabels = routeNums;
+    routeNums = base2dec(routeNums, 36);
 end
+
+%% initialize variables
+lw = 1; % line width
 
 N = size(data,1);
 M = numel(routeNums);
 
+X = cell(M,1);
+Y = cell(M,1);
+
+%% filters
 isSpecifiedRoute = true(N,M);
 for i = 1:M
     isSpecifiedRoute(:,i) = data(:,1) == routeNums(i);
 end
-isWeekday = data(:,3) <= 3;
+% isWeekday = data(:,3) <= 3;
 
-X = cell(M,1);
-Y = cell(M,1);
+%% plot
 figure;
 hold on;
 for i = 1:M
-    ii = isSpecifiedRoute(:,i) & isWeekday;
+    ii = isSpecifiedRoute(:,i);
     
     X{i} = data(ii, 2);
     Y{i} = data(ii, 4);
     
+    
     if toSmooth
-        plot(X{i}, csaps(X{i},Y{i},.01,X{i}), 'linewidth', 1);
+        if numel(X{i}) < 2
+            fprintf([routeNumLabels(i) '\n']);
+            plot(X{i}, Y{i}, 'linewidth', lw);
+        else
+            plot(X{i}, csaps(X{i},Y{i},.01,X{i}), 'linewidth', lw);
+        end
     else
-        plot(X{i}, Y{i}, 'linewidth', 1);
+        plot(X{i}, Y{i}, 'linewidth', lw);
     end
 end
 hold off
@@ -78,6 +92,7 @@ datetick2;
 
 legend(routeNumLabels);
 
+%% set outputs
 
 dates = X;
 rides = Y;
