@@ -1,10 +1,34 @@
 function [routes, normAreas] = normWkndAreasFFT(data)
+% [routes, normAreas] = normWkndAreasFFT(data)
+%
+% Compute the ratio of the amplitude of the DFT nearest to 1/7
+% (representing a week frequency in Hz) to the total area under the DFT.
+%
+% INPUTS:
+%   data : Nx4 matrix. If not specified it is loaded.
+%          DEFAULT: data = load('cta_bus_rides_per_day.mat');
+%
+% OUTPUTS:
+%   routes    : Route numbers in the base 10 representation of their base
+%               36 values.
+%   normAreas : Corresponding normalized 1/week amplitude, sorted in
+%               descending order.
+%
+% EXAMPLE:
+%
+% [routes, normAreas] = normWkndAreasFFT;
+%
 
+% Kevin Rose
+% September, 2015
+
+%% INPUT HANDLING
 if nargin < 2 || isempty(data)
     data = load('cta_bus_rides_per_day.mat');
     data = data.data;
 end
 
+%% FFT CALCULATION
 routes = unique(data(:,1));
 
 normAreas = zeros(numel(routes),1);
@@ -26,15 +50,7 @@ for route = routes'
     P1 = P2(1:L2+1);
     P1(2:end-1) = 2*P1(2:end-1);
     f = ((0:L2)/L)';
-    
-%     jj = f > (1/7 - .001) & f < (1/7 + .001);
-%     if sum(jj) == 1
-%         normAreas(i) = P1(jj) / trapz(f, P1);
-%     elseif sum(jj) == 0
-%         normAreas(i) = 0;
-%     else
-%         normAreas(i) = trapz(f(jj), P1(jj)) / trapz(f, P1);
-%     end
+
     [~, weekIdx] = min(abs(f - 1/7));
     normAreas(i) = P2(weekIdx) / trapz(f, P1);
     
@@ -42,6 +58,7 @@ for route = routes'
     
 end
 
+%% OUTPUT
 [normAreas, ii] = sort(normAreas, 1, 'descend');
 routes = routes(ii);
 
