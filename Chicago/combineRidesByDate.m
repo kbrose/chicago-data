@@ -13,10 +13,17 @@ routeNums = unique(data(:,1));
 rides = zeros(numel(dates), numel(routeNums));
 
 %% CALCULATE
-i = 1
+i = 1;
+j = 0;
 oldDate = 0;
 while i < size(data,1)
-    currDate = 
+    currDate = data(i,2);
+    if currDate ~= oldDate
+        oldDate = currDate;
+        j = j + 1;
+    end
+    rides(j, routeNums == data(i,1)) = data(i,4);
+    i = i+1;
 end
 
 end
