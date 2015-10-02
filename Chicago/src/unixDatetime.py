@@ -9,6 +9,12 @@ from http://stackoverflow.com/questions/13260863/
 import calendar, datetime
 
 # Convert a unix time u to a datetime object d, and vice versa
-def dt(u): return datetime.datetime.utcfromtimestamp(u)
-def ut(d): return calendar.timegm(d.timetuple())
+def dt(u):
+    if type(u) == list:
+        return [datetime.datetime.utcfromtimestamp(x) for x in u]
+    return datetime.datetime.utcfromtimestamp(u)
+def ut(d):
+    if type(d) == list:
+        return [calendar.timegm(x.timetuple()) for x in d]
+    return calendar.timegm(d.timetuple())
     

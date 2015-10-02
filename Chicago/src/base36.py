@@ -7,21 +7,21 @@ Taken from http://stackoverflow.com/questions/1181919/python-base-36-encoding
 @author: Kevin
 """
 
-def base36encode(number):
-    if not isinstance(number, (int, long)):
+def base36encode(numberInDecimal):
+    if not isinstance(numberInDecimal, (int, long)):
         raise TypeError('number must be an integer')
-    if number < 0:
+    if numberInDecimal < 0:
         raise ValueError('number must be positive')
 
     alphabet = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'
 
     base36 = ''
-    while number:
-        number, i = divmod(number, 36)
+    while numberInDecimal:
+        numberInDecimal, i = divmod(numberInDecimal, 36)
         base36 = alphabet[i] + base36
 
     return base36 or alphabet[0]
 
-def base36decode(number):
-    return int(number,36)
+def base36decode(numberInBase36):
+    return int(numberInBase36,36)
     
