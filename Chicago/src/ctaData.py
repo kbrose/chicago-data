@@ -9,6 +9,8 @@ import base36
 import numpy as np
 from datetime import datetime
 import unixDatetime
+import matplotlib.pyplot as plt
+import csaps
 
 
 class bus:
@@ -16,6 +18,33 @@ class bus:
         self.data, self.labels = self.readBusData(filename)
         self.dataByDay, self.dataByDayDates, self.dataByDayRoutes \
             = self.generateDataByDay()
+    
+    def plotRoutes(self, routes, p=1, ax=None):
+        if ax is None:
+            fig = plt.figure()
+            ax = fig.add_subplot(111)
+            
+        dates = map(lambda x: unixDatetime.dt(x), self.dataByDayDates)
+        date_ords = map(lambda x: x.toordinal(), dates)
+
+        legend_labels = []
+        lines = []
+        for route in routes:
+            ax.hold(True);
+            if type(route) is not str:
+                route = str(route)
+            route = base36.base36decode(route)
+            filt = self.dataByDayRoutes == route
+            if not filt.any():
+                print('Route ' + base36.base36encode(route) + ' appears to not exist.')
+                continue
+            legend_labels = legend_labels + [base36.base36encode(route)]
+            line = plt.plot(dates,
+                            csaps.csaps(date_ords, self.dataByDay[:,filt], p, date_ords),
+                            axes=ax)
+            lines = lines + [line]
+        plt.legend(legend_labels);
+        return ax, lines
 
     def filterRoute(self, routeName):
         if type(routeName) != str:

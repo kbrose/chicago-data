@@ -8,12 +8,15 @@ Created on Sun Oct 04 20:05:13 2015
 import numpy as np
 import scipy as sp
 from scipy import interpolate
+from scipy.sparse import linalg
 
 
 def csaps(x,y,p,xi=[],w=[]):
     ii = np.argsort(x)
-    x = x[ii]
-    y = y[ii]
+    x = np.array(x)
+    y = np.array(y)
+    x = x.take(ii)
+    y = y.take(ii)
 
     h = np.diff(x)
     
@@ -28,39 +31,31 @@ def csaps(x,y,p,xi=[],w=[]):
                                     h[1:]]), [-1, 0, 1], n-2, n-2)
     QT = sp.sparse.spdiags(np.array([1. / h[0:-1], 
                                      -(1. / h[0:-1] + 1. / h[1:]), 
-                                     1. / h[1:]]), [0, 1, 2], n-2, n)
+                                     1. / h[1:]]), [0, -1, -2], n, n-2).transpose()
 
     # solve for the scaled second derivatives u and 
     # for the function values a at the knots (if p = 1, a = y) 
 
-#    print R.toarray()
-#    print QT.toarray()
     v = 6*(1-p)*QT.dot(sp.sparse.spdiags(1. / w.flatten(), 0, len(w), len(w))).dot(QT.T) + p*R
-#    print v.toarray()
-    u = np.divide(v, QT.dot(y))
-    print u
-    return
-    #u = np.divide(6*(1-p)*np.dot(np.dot(QT,sp.sparse.spdiags(1. / w.flatten(), 0, len(w), len(w))), QT.T) + p*R,
-   #               np.dot(QT,y))
-    print sp.sparse.spdiags(1. / w.flatten(), 0, len(w), len(w)).dot(QT.T).dot(u)
+    u = linalg.spsolve(v, QT.dot(y))
     a = y - 6*(1-p)*sp.sparse.spdiags(1. / w.flatten(), 0, len(w), len(w)).dot(QT.T).dot(u)
     
     # derivatives at all but the last knot for the piecewise cubic spline
-    aa = a[0:-1, :]
+    aa = a[0:-1]
     cc = np.zeros(y.shape)
-    cc[1:n-1, :] = 6 * p * u
+    cc[1:n-1] = 6 * p * u
     dd = np.diff(cc) / h
-    cc = cc[0:-1, :]
+    cc = cc[0:-1]
     bb = np.diff(a) / h - cc / 2 * h - dd / 6 * h ** 2
-
-    ret = interpolate.PPoly(np.concatenate((dd.reshape((dd.size, 1)) / 6, 
-                                            cc.reshape((cc.size, 1)) / 2, 
-                                            bb.reshape((bb.size, 1)), 
-                                            aa.reshape((aa.size, 1))),
-                                            axis=1),
-                                            x)
     
-    if xi.size == 0:
+    coefs =   np.concatenate((dd.reshape((1,dd.size)) / 6, 
+                              cc.reshape((1,cc.size)) / 2, 
+                              bb.reshape((1,bb.size)), 
+                              aa.reshape((1,aa.size))))                      
+    ret = interpolate.interpolate.PPoly(coefs, x)
+
+    xi = np.array(xi)
+    if xi.size != 0:
         ret = ret.__call__(xi)
         
     return ret
