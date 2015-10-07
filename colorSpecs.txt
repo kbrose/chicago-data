@@ -1,0 +1,7 @@
+use on black background: 66C2A5, FC8D62, 8DA0CB, E78AC3, A6D854, FFD92F, A07364, 533E79, B54F67
+use on white background: 4EAFE7, D14634, 365329, A869B7, 4C5067, 34A47B, 993265, BEAEC8, 644138, AB9DF4
+matlab's default R2014b or greater: 0070B9, D55119, E8AE1F, 7C2E8B, 75A92F, 4BBAE9, 9F142E
+
+shout-outs to:
+    http://tools.medialab.sciences-po.fr/iwanthue/
+    http://colorbrewer2.org/

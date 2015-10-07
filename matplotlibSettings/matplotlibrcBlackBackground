@@ -330,7 +330,7 @@ grid.color        :   white   # grid color
 # See http://matplotlib.org/api/figure_api.html#matplotlib.figure.Figure
 #figure.titlesize : medium     # size of the figure title
 #figure.titleweight : normal   # weight of the figure title
-#figure.figsize   : 8, 6    # figure size in inches
+figure.figsize   : 8, 6    # figure size in inches
 #figure.dpi       : 80      # figure dots per inch
 figure.facecolor  : 0.075    # figure facecolor; 0.75 is scalar gray
 #figure.edgecolor : white   # figure edgecolor

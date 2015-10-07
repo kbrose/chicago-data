@@ -7,6 +7,7 @@ Taken from http://stackoverflow.com/questions/1181919/python-base-36-encoding
 @author: Kevin
 """
 
+
 def base36encode(numberInDecimal):
     if not isinstance(numberInDecimal, (int, long)):
         raise TypeError('number must be an integer')
@@ -22,6 +23,6 @@ def base36encode(numberInDecimal):
 
     return base36 or alphabet[0]
 
+
 def base36decode(numberInBase36):
-    return int(numberInBase36,36)
-    
+    return int(numberInBase36, 36)
