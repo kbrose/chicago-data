@@ -230,6 +230,9 @@ class train:
                     map_id = [map_ids[i] for i, x in enumerate(stop_names) if x == stopl]
                     if not map_id:
                         map_id = [map_ids[i] for i, x in enumerate(station_names) if x == stopl]
+                        if not map_id:
+                            print('Stop "' + stop + '" cannot be found.')
+                            continue
                 map_id = map_id[0]
                 filt = self.stops == map_id
             else:
@@ -240,13 +243,82 @@ class train:
                 print('Stop ' + str(stop) + ' cannot be found.')
                 continue
 
-            legend_labels = legend_labels + [stop_descriptive_names[map_ids.index(map_id)]]
+            legend_labels = legend_labels + [self.station_name(map_id, 1)]
             line = plt.plot(dates,
                             csaps.csaps(date_ords, self.data[:, filt].sum(axis=1), p, date_ords),
                             axes=ax)
             lines = lines + [line]
 
         plt.legend(legend_labels)
+        return ax, lines
+
+    def plot_fft(self, stops, ax=None):
+        """
+        Plot the [discrete/fast] fourier transform of train riderships per day
+        for all the specified stops on the optionally specified axes object. The
+        FFT is normalized so that it sums to 1 so that different stops can be
+        compared more meaningfully.
+
+        Parameters
+        ----------
+        stops : list of stops, can be integers or strings, i.e. [2, 6, 'x28']
+                stops can also be a scalar, i.e. just "x28" or 2
+        ax    : axes object to plot to.
+                DEFAULT: ax = None
+
+        Returns
+        -------
+        ax    : axes object the object was plotted on
+        lines : list of line objects plotted for each route.
+        """
+        if ax is None:
+            fig = plt.figure()
+            ax = fig.add_subplot(111)
+
+        if not isinstance(stops, (list, np.ndarray)):
+            stops = [stops]
+
+        station_names          = map(lambda x: x[3].lower(), self.stop_data)
+        stop_names             = map(lambda x: x[2].lower(), self.stop_data)
+        stop_descriptive_names = map(lambda x: x[4].lower(), self.stop_data)
+        map_ids                = map(lambda x: x[5], self.stop_data)
+
+        legend_labels = []
+        lines = []
+        for stop in stops:
+            ax.hold(True)
+
+            if type(stop) is str:
+                stopl = stop.lower()
+                map_id = [map_ids[i] for i, x in enumerate(stop_descriptive_names) if x == stopl]
+                if not map_id:
+                    map_id = [map_ids[i] for i, x in enumerate(stop_names) if x == stopl]
+                    if not map_id:
+                        map_id = [map_ids[i] for i, x in enumerate(station_names) if x == stopl]
+                        if not map_id:
+                            print('Stop "' + stop + '" cannot be found.')
+                            continue
+                map_id = map_id[0]
+                filt = self.stops == map_id
+            else:
+                filt = self.stops == stop
+                map_id = stop
+
+            if not filt.any():
+                print('stop ' + str(stop) + ' appears to not exist.')
+                continue
+
+            time_x = self.data[:,filt].squeeze()
+            y = np.absolute(np.fft.rfft(time_x))
+            y = y / np.sum(y)
+            x = np.fft.rfftfreq(time_x.size, 1)
+
+            legend_labels = legend_labels + [self.station_name(map_id, 1)]
+            line = plt.plot(x, y, axes=ax)
+            lines = lines + [line]
+
+        plt.legend(legend_labels)
+
         return ax, lines
 
     def station_name(self, map_id, name_type=1):
@@ -348,6 +420,3 @@ class train:
 
     def __parse_l_stops_list_line(self, txt):
         return [x.strip('"') for x in re.split(r",+(?=[^()]*(?:\(|$))", txt)]
-
-b = bus()
-b.plot_fft('2')
