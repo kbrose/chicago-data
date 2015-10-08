@@ -21,11 +21,15 @@ class bus:
     """
 
     def __init__(self, filename='../data/bus_route_daily_totals.csv'):
+        """
+        Loads the data from the CSV files
+        """
         self.raw_data, self.raw_labels = self.__read_bus_data(filename)
         self.data, self.dates, self.routes = self.__generate_data_by_day()
 
     def plot_routes(self, routes, p=1, ax=None):
-        """Plots all specified routes on the same axis.
+        """
+        Plots all specified routes on the same axis.
 
         Parameters
         ----------
@@ -39,7 +43,7 @@ class bus:
         Returns
         -------
         ax    : axes object the object was plotted on
-        lines : list of line objects for each route.
+        lines : list of line objects plotted for each route.
         """
         if ax is None:
             fig = plt.figure()
@@ -70,6 +74,60 @@ class bus:
             line = plt.plot(dates,
                             csaps.csaps(date_ords, self.data[:, filt], p, date_ords),
                             axes=ax)
+            lines = lines + [line]
+
+        plt.legend(legend_labels)
+
+        return ax, lines
+
+    def plot_fft(self, routes, ax=None):
+        """
+        Plot the [discrete/fast] fourier transform of bus riderships per day
+        for all the specified routes on the optionally specified axis. The FFT
+        is normalized so that it sums to 1 so that different routes can be
+        compared more meaningfully.
+
+        Parameters
+        ----------
+        routes : list of routes, can be integers or strings, i.e. [2, 6, 'x28']
+                 routes can also be a scalar, i.e. just "x28" or 2
+        ax     : axes object to plot to.
+                 DEFAULT: ax = None
+
+        Returns
+        -------
+        ax    : axes object the object was plotted on
+        lines : list of line objects plotted for each route.
+        """
+        if ax is None:
+            fig = plt.figure()
+            ax = fig.add_subplot(111)
+
+        if not isinstance(routes, (list, np.ndarray)):
+            routes = [routes]
+
+        legend_labels = []
+        lines = []
+        for route in routes:
+            ax.hold(True)
+            if type(route) is not str:
+                route = str(route)
+            route = base36.base36decode(route)
+
+            filt = self.routes == route
+            if not filt.any():
+                print('Route ' +
+                      base36.base36encode(route) +
+                      ' appears to not exist.')
+                continue
+
+            time_x = self.data[:,filt].squeeze()
+            y = np.absolute(np.fft.rfft(time_x))
+            y = y / np.sum(y)
+            x = np.fft.rfftfreq(time_x.size, 1)
+
+            legend_labels = legend_labels + [base36.base36encode(route)]
+            line = plt.plot(x, y, axes=ax)
             lines = lines + [line]
 
         plt.legend(legend_labels)
@@ -109,13 +167,22 @@ class bus:
 
 
 class train:
+    """
+    Class with functions and data related to Chicago Transit Authority (CTA)
+    data pertaining to train rides broken down by day and station.
+    """
+
     def __init__(self, filename='../data/L_station_daily_entry_totals.csv'):
+        """
+        Loads the data from CSV files.
+        """
         self.raw_data, self.raw_labels = self.__read_train_data(filename)
         self.data, self.dates, self.stops = self.__generate_data_by_day()
         self.stop_data, self.stop_data_labels = self.__get_L_stop_names()
 
     def plot_stops(self, stops, p=1, ax=None):
-        """Plots all specified routes on the same axis.
+        """
+        Plots all specified routes on the same axis.
 
         Parameters
         ----------
@@ -182,7 +249,22 @@ class train:
         plt.legend(legend_labels)
         return ax, lines
 
-    def station_name(self, map_id, level=1):
+    def station_name(self, map_id, name_type=1):
+        """
+        Returns the station name of the given numerical ID
+
+        Parameters
+        ----------
+        map_id :     the numerical ID as listed in the original CSV file.
+        name_type  : type of name to be returned. 0 correponds to
+                     the stop name, 1 corresponds to station name, and 2
+                     corresponds to the descriptive station name.
+                     DEFAULT: name_type = 1
+
+        Returns
+        -------
+        name  : the station name
+        """
         map_ids                = map(lambda x: x[5], self.stop_data)
 
         try:
@@ -191,7 +273,7 @@ class train:
             print('Cannot find a match for' + str(map_id))
             return ''
 
-        names = map(lambda x: x[2+level], self.stop_data)
+        names = map(lambda x: x[2+name_type], self.stop_data)
 
         return names[i]
 
@@ -267,3 +349,5 @@ class train:
     def __parse_l_stops_list_line(self, txt):
         return [x.strip('"') for x in re.split(r",+(?=[^()]*(?:\(|$))", txt)]
 
+b = bus()
+b.plot_fft('2')
