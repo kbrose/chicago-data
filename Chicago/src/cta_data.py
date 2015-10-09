@@ -73,8 +73,8 @@ class bus:
             legend_labels = legend_labels + [base36.base36encode(route)]
             line = plt.plot(dates,
                             csaps.csaps(date_ords, self.data[:, filt], p, date_ords),
-                            axes=ax)
-            lines = lines + [line]
+                            axes=ax, gid=base36.base36encode(route))
+            lines = lines + line
 
         plt.legend(legend_labels)
 
@@ -127,8 +127,8 @@ class bus:
             x = np.fft.rfftfreq(time_x.size, 1)
 
             legend_labels = legend_labels + [base36.base36encode(route)]
-            line = plt.plot(x, y, axes=ax)
-            lines = lines + [line]
+            line = plt.plot(x, y, axes=ax, gid=base36.base36encode(route))
+            lines = lines + line
 
         plt.legend(legend_labels)
 
@@ -246,8 +246,8 @@ class train:
             legend_labels = legend_labels + [self.station_name(map_id, 1)]
             line = plt.plot(dates,
                             csaps.csaps(date_ords, self.data[:, filt].sum(axis=1), p, date_ords),
-                            axes=ax)
-            lines = lines + [line]
+                            axes=ax, gid=self.station_name(map_id, 1))
+            lines = lines + line
 
         plt.legend(legend_labels)
         return ax, lines
@@ -314,8 +314,8 @@ class train:
             x = np.fft.rfftfreq(time_x.size, 1)
 
             legend_labels = legend_labels + [self.station_name(map_id, 1)]
-            line = plt.plot(x, y, axes=ax)
-            lines = lines + [line]
+            line = plt.plot(x, y, axes=ax, gid=self.station_name(map_id, 1))
+            lines = lines + line
 
         plt.legend(legend_labels)
 
