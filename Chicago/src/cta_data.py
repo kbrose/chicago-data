@@ -27,6 +27,7 @@ class bus:
         self.raw_data, self.raw_labels = self.__read_bus_data(filename)
         self.data, self.dates, self.routes = self.__generate_data_by_day()
 
+    # TODO: add a down-sampling parameter
     def plot_routes(self, routes, p=1, ax=None):
         """
         Plots all specified routes on the same axis.
@@ -60,20 +61,19 @@ class bus:
         for route in routes:
             ax.hold(True)
             if type(route) is not str:
-                route = str(route)
-            route = base36.base36decode(route)
+                route = base36.tobase36(route)
+            route = base36.tobase10(route)
 
             filt = self.routes == route
+            route_name = base36.tobase36(route)
             if not filt.any():
-                print('Route ' +
-                      base36.base36encode(route) +
-                      ' appears to not exist.')
+                print('Route ' + route_name + ' appears to not exist.')
                 continue
 
-            legend_labels = legend_labels + [base36.base36encode(route)]
-            line = plt.plot(dates,
-                            csaps.csaps(date_ords, self.data[:, filt], p, date_ords),
-                            axes=ax, gid=base36.base36encode(route))
+            legend_labels = legend_labels + [route_name]
+            smoothed_data = csaps.csaps(date_ords, self.data[:, filt], p, date_ords)
+            smoothed_data[smoothed_data < 0] = 0
+            line = plt.plot(dates, smoothed_data, axes=ax, gid=route_name)
             lines = lines + line
 
         plt.legend(legend_labels)
@@ -112,12 +112,12 @@ class bus:
             ax.hold(True)
             if type(route) is not str:
                 route = str(route)
-            route = base36.base36decode(route)
+            route = base36.tobase10(route)
 
             filt = self.routes == route
             if not filt.any():
                 print('Route ' +
-                      base36.base36encode(route) +
+                      base36.tobase36(route) +
                       ' appears to not exist.')
                 continue
 
@@ -126,8 +126,8 @@ class bus:
             y = y / np.sum(y)
             x = np.fft.rfftfreq(time_x.size, 1)
 
-            legend_labels = legend_labels + [base36.base36encode(route)]
-            line = plt.plot(x, y, axes=ax, gid=base36.base36encode(route))
+            legend_labels = legend_labels + [base36.tobase36(route)]
+            line = plt.plot(x, y, axes=ax, gid=base36.tobase36(route))
             lines = lines + line
 
         plt.legend(legend_labels)
@@ -157,9 +157,9 @@ class bus:
             data = np.zeros([num_lines-1, 4])
             i = 0
             while line[0] != '':
-                data[i, 0] = base36.base36decode(line[0])
+                data[i, 0] = base36.tobase10(line[0])
                 data[i, 1] = unix_datetime.ut((datetime.strptime(line[1], '%m/%d/%Y')))
-                data[i, 2] = base36.base36decode(line[2])
+                data[i, 2] = base36.tobase10(line[2])
                 data[i, 3] = int(line[3])
                 i = i + 1
                 line = f.readline().strip().split(',')
@@ -244,8 +244,9 @@ class train:
                 continue
 
             legend_labels = legend_labels + [self.station_name(map_id, 1)]
-            line = plt.plot(dates,
-                            csaps.csaps(date_ords, self.data[:, filt].sum(axis=1), p, date_ords),
+            smoothed_data = csaps.csaps(date_ords, self.data[:, filt].sum(axis=1), p, date_ords)
+            smoothed_data[smoothed_data < 0] = 0
+            line = plt.plot(dates, smoothed_data,
                             axes=ax, gid=self.station_name(map_id, 1))
             lines = lines + line
 
@@ -337,12 +338,12 @@ class train:
         -------
         name  : the station name
         """
-        map_ids                = map(lambda x: x[5], self.stop_data)
+        map_ids = map(lambda x: x[5], self.stop_data)
 
         try:
             i = map_ids.index(int(map_id))
         except ValueError:
-            print('Cannot find a match for' + str(map_id))
+            print('Cannot find a match for ' + str(map_id))
             return ''
 
         names = map(lambda x: x[2+name_type], self.stop_data)
@@ -374,7 +375,7 @@ class train:
             while line[0] != '':
                 data[i, 0] = int(line[0])
                 data[i, 1] = unix_datetime.ut(datetime.strptime(line[2], '%m/%d/%Y'))
-                data[i, 2] = base36.base36decode(line[3])
+                data[i, 2] = base36.tobase10(line[3])
                 data[i, 3] = int(line[4])
                 i = i + 1
                 line = f.readline().strip().split(',')

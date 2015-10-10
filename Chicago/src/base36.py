@@ -8,9 +8,12 @@ Taken from http://stackoverflow.com/questions/1181919/python-base-36-encoding
 """
 
 
-def base36encode(numberInDecimal):
+def tobase36(numberInDecimal):
     if not isinstance(numberInDecimal, (int, long)):
-        raise TypeError('number must be an integer')
+        try:
+            numberInDecimal = long(numberInDecimal)
+        except:
+            raise TypeError('number must be an integer or convertible to an integer')
     if numberInDecimal < 0:
         raise ValueError('number must be positive')
 
@@ -24,5 +27,5 @@ def base36encode(numberInDecimal):
     return base36 or alphabet[0]
 
 
-def base36decode(numberInBase36):
+def tobase10(numberInBase36):
     return int(numberInBase36, 36)
