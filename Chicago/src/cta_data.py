@@ -26,8 +26,9 @@ class bus:
         """
         self.raw_data, self.raw_labels = self.__read_bus_data(filename)
         self.data, self.dates, self.routes = self.__generate_data_by_day()
+        del(self.raw_data)
+        del(self.raw_labels)
 
-    # TODO: add a down-sampling parameter
     def plot_routes(self, routes, p=1, ax=None):
         """
         Plots all specified routes on the same axis.
@@ -60,12 +61,14 @@ class bus:
         lines = []
         for route in routes:
             ax.hold(True)
-            if type(route) is not str:
-                route = base36.tobase36(route)
-            route = base36.tobase10(route)
+            if type(route) is str:
+                route_name = route
+                route = base36.tobase10(route)
+            else:
+                route_name = str(route)
+                route = base36.tobase10(str(int(route)))
 
             filt = self.routes == route
-            route_name = base36.tobase36(route)
             if not filt.any():
                 print('Route ' + route_name + ' appears to not exist.')
                 continue
@@ -111,14 +114,14 @@ class bus:
         for route in routes:
             ax.hold(True)
             if type(route) is not str:
-                route = str(route)
+                route = base36.tobase36(route)
             route = base36.tobase10(route)
 
             filt = self.routes == route
+            route_name = base36.tobase36(route)
+
             if not filt.any():
-                print('Route ' +
-                      base36.tobase36(route) +
-                      ' appears to not exist.')
+                print('Route ' + route_name + ' appears to not exist.')
                 continue
 
             time_x = self.data[:,filt].squeeze()
@@ -126,13 +129,25 @@ class bus:
             y = y / np.sum(y)
             x = np.fft.rfftfreq(time_x.size, 1)
 
-            legend_labels = legend_labels + [base36.tobase36(route)]
-            line = plt.plot(x, y, axes=ax, gid=base36.tobase36(route))
+            legend_labels = legend_labels + [route_name]
+            line = plt.plot(x, y, axes=ax, gid=route_name)
             lines = lines + line
 
         plt.legend(legend_labels)
 
         return ax, lines
+
+    def routes_to_base36(self):
+        """
+        Returns the routes in base 36, i.e. the normal, human-readable
+        format. This is useful for plotting all routes:
+
+        >>> import cta_data
+        >>> bus = cta_data.bus()
+        >>> bus.plot_routes(bus.routes_to_base36(), .01)
+        >>> bus.plot_fft(bus.routes_to_base36())
+        """
+        return map(lambda x: base36.tobase36(x), self.routes)
 
     def __generate_data_by_day(self):
         routes = np.unique(self.raw_data[:, 0])
@@ -243,11 +258,13 @@ class train:
                 print('Stop ' + str(stop) + ' cannot be found.')
                 continue
 
-            legend_labels = legend_labels + [self.station_name(map_id, 1)]
+            station_name = self.station_name(map_id, 1)
+
+            legend_labels = legend_labels + [station_name]
             smoothed_data = csaps.csaps(date_ords, self.data[:, filt].sum(axis=1), p, date_ords)
             smoothed_data[smoothed_data < 0] = 0
             line = plt.plot(dates, smoothed_data,
-                            axes=ax, gid=self.station_name(map_id, 1))
+                            axes=ax, gid=station_name)
             lines = lines + line
 
         plt.legend(legend_labels)
@@ -257,7 +274,7 @@ class train:
         """
         Plot the [discrete/fast] fourier transform of train riderships per day
         for all the specified stops on the optionally specified axes object. The
-        FFT is normalized so that it sums to 1 so that different stops can be
+        FFT is normalized so that it sums to 1. This allows different stops to be
         compared more meaningfully.
 
         Parameters
@@ -309,13 +326,15 @@ class train:
                 print('stop ' + str(stop) + ' appears to not exist.')
                 continue
 
+            station_name = self.station_name(map_id, 1)
+
             time_x = self.data[:,filt].squeeze()
             y = np.absolute(np.fft.rfft(time_x))
             y = y / np.sum(y)
             x = np.fft.rfftfreq(time_x.size, 1)
 
-            legend_labels = legend_labels + [self.station_name(map_id, 1)]
-            line = plt.plot(x, y, axes=ax, gid=self.station_name(map_id, 1))
+            legend_labels = legend_labels + [station_name]
+            line = plt.plot(x, y, axes=ax, gid=station_name)
             lines = lines + line
 
         plt.legend(legend_labels)
