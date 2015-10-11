@@ -29,7 +29,7 @@ class bus:
         del(self.raw_data)
         del(self.raw_labels)
 
-    def plot_routes(self, routes, p=1, ax=None):
+    def plot_routes(self, routes, p=1, stacked=False, ax=None):
         """
         Plots all specified routes on the same axis.
 
@@ -41,11 +41,12 @@ class bus:
                  DEFAULT: p = 1 for perfect interpolation
         ax     : axes object to plot to.
                  DEFAULT: ax = None
+        stacked: True to produce a stacked area plot showing total amounts as well
+                 as individual route contributions.
 
         Returns
         -------
-        ax    : axes object the object was plotted on
-        lines : list of line objects plotted for each route.
+        ax : axes object the object was plotted on
         """
         if ax is None:
             fig = plt.figure()
@@ -58,7 +59,9 @@ class bus:
         date_ords = map(lambda x: x.toordinal(), dates)
 
         legend_labels = []
-        lines = []
+        if stacked:
+            y = np.tile(np.nan, (len(dates), len(routes)))
+            stack_idx = 0
         for route in routes:
             ax.hold(True)
             if type(route) is str:
@@ -76,12 +79,19 @@ class bus:
             legend_labels = legend_labels + [route_name]
             smoothed_data = csaps.csaps(date_ords, self.data[:, filt], p, date_ords)
             smoothed_data[smoothed_data < 0] = 0
-            line = plt.plot(dates, smoothed_data, axes=ax, gid=route_name)
-            lines = lines + line
 
-        plt.legend(legend_labels)
+            if stacked:
+                y[:,stack_idx] = smoothed_data
+                stack_idx += 1
+            else:
+                plt.plot(dates, smoothed_data, axes=ax, gid=route_name)
 
-        return ax, lines
+        if stacked:
+            ax.stackplot(dates, y.T, baseline='weighted_wiggle', linewidth=0)
+        else:
+            plt.legend(legend_labels)
+
+        return ax
 
     def plot_fft(self, routes, ax=None):
         """
