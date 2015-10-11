@@ -87,7 +87,7 @@ class bus:
                 plt.plot(dates, smoothed_data, axes=ax, gid=route_name)
 
         if stacked:
-            ax.stackplot(dates, y.T, baseline='weighted_wiggle', linewidth=0)
+            ax.stackplot(dates, y.T, baseline='zero', linewidth=0)
         else:
             plt.legend(legend_labels)
 
