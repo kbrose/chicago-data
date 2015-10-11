@@ -24,10 +24,8 @@ class bus:
         """
         Loads the data from the CSV files
         """
-        self.raw_data, self.raw_labels = self.__read_bus_data(filename)
-        self.data, self.dates, self.routes = self.__generate_data_by_day()
-        del(self.raw_data)
-        del(self.raw_labels)
+        raw_data, raw_labels = self.__read_bus_data(filename)
+        self.data, self.dates, self.routes = self.__generate_data_by_day(raw_data, raw_labels)
 
     def plot_routes(self, routes, p=1, stacked=False, ax=None):
         """
@@ -84,12 +82,19 @@ class bus:
                 y[:,stack_idx] = smoothed_data
                 stack_idx += 1
             else:
-                plt.plot(dates, smoothed_data, axes=ax, gid=route_name)
+                ax.plot(dates, smoothed_data, gid=route_name)
 
         if stacked:
-            ax.stackplot(dates, y.T, baseline='zero', linewidth=0)
+            poly_collections = ax.stackplot(dates, y.T, baseline='zero', linewidth=0)
+            legend_proxies = []
+            for i, poly in enumerate(poly_collections):
+                poly.set_gid(legend_labels[i])
+                legend_proxies.append(plt.Rectangle((0, 0), 1, 1, fc=poly.get_facecolor()[0]))
+            ax.legend(legend_proxies, legend_labels, ncol=max([(len(routes)/30), 1]),
+                      bbox_to_anchor=[1, .5], loc='center left')
         else:
-            plt.legend(legend_labels)
+            ax.legend(legend_labels, ncol=max([(len(routes)/30), 1]),
+                      bbox_to_anchor=[1, .5], loc='center left')
 
         return ax
 
@@ -152,23 +157,23 @@ class bus:
         Returns the routes in base 36, i.e. the normal, human-readable
         format. This is useful for plotting all routes:
 
-        >>> import cta_data
-        >>> bus = cta_data.bus()
+        >>> import cta
+        >>> bus = cta.bus()
         >>> bus.plot_routes(bus.routes_to_base36(), .01)
         >>> bus.plot_fft(bus.routes_to_base36())
         """
         return map(lambda x: base36.tobase36(x), self.routes)
 
-    def __generate_data_by_day(self):
-        routes = np.unique(self.raw_data[:, 0])
-        dates = np.unique(self.raw_data[:, 1])
+    def __generate_data_by_day(self, raw_data, raw_labels):
+        routes = np.unique(raw_data[:, 0])
+        dates = np.unique(raw_data[:, 1])
         dataByDay = np.zeros([len(dates), len(routes)])
         idx = 0
-        L = self.raw_data.shape[0]
+        L = raw_data.shape[0]
         for dateIdx, date in enumerate(dates):
-            while idx < L and self.raw_data[idx, 1] == date:
-                routeNumIdx = np.nonzero(routes == self.raw_data[idx, 0])[0]
-                dataByDay[dateIdx, routeNumIdx] = self.raw_data[idx, 3]
+            while idx < L and raw_data[idx, 1] == date:
+                routeNumIdx = np.nonzero(routes == raw_data[idx, 0])[0]
+                dataByDay[dateIdx, routeNumIdx] = raw_data[idx, 3]
                 idx = idx + 1
         return dataByDay, dates, routes
 
@@ -201,8 +206,8 @@ class train:
         """
         Loads the data from CSV files.
         """
-        self.raw_data, self.raw_labels = self.__read_train_data(filename)
-        self.data, self.dates, self.stops = self.__generate_data_by_day()
+        raw_data, raw_labels = self.__read_train_data(filename)
+        self.data, self.dates, self.stops = self.__generate_data_by_day(raw_data, raw_labels)
         self.stop_data, self.stop_data_labels = self.__get_L_stop_names()
 
     def plot_stops(self, stops, p=1, ax=None):
@@ -379,16 +384,16 @@ class train:
 
         return names[i]
 
-    def __generate_data_by_day(self):
-            stationNumbers = np.unique(self.raw_data[:, 0])
-            dates = np.unique(self.raw_data[:, 1])
+    def __generate_data_by_day(self, raw_data, raw_labels):
+            stationNumbers = np.unique(raw_data[:, 0])
+            dates = np.unique(raw_data[:, 1])
             dataByDay = np.zeros([len(dates), len(stationNumbers)])
             idx = 0
-            L = self.raw_data.shape[0]
+            L = raw_data.shape[0]
             for dateIdx, date in enumerate(dates):
-                while idx < L and self.raw_data[idx, 1] == date:
-                    stationNumberIdx = np.nonzero(stationNumbers == self.raw_data[idx, 0])[0]
-                    dataByDay[dateIdx, stationNumberIdx] = self.raw_data[idx, 3]
+                while idx < L and raw_data[idx, 1] == date:
+                    stationNumberIdx = np.nonzero(stationNumbers == raw_data[idx, 0])[0]
+                    dataByDay[dateIdx, stationNumberIdx] = raw_data[idx, 3]
                     idx = idx + 1
             return dataByDay, dates, stationNumbers
 
