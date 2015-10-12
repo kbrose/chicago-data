@@ -8,10 +8,11 @@ Created on Tue Sep 29 22:59:45 2015
 import base36
 import numpy as np
 from datetime import datetime
-import unix_datetime
+import unix_datetime as udt
 import matplotlib.pyplot as plt
 import csaps
 import re
+import scipy.stats
 
 
 class bus:
@@ -53,7 +54,7 @@ class bus:
         if not isinstance(routes, (list, np.ndarray)):
             routes = [routes]
 
-        dates = map(lambda x: unix_datetime.dt(x), self.dates)
+        dates = map(lambda x: udt.dt(x), self.dates)
         date_ords = map(lambda x: x.toordinal(), dates)
 
         legend_labels = []
@@ -74,7 +75,7 @@ class bus:
                 print('Route ' + route_name + ' appears to not exist.')
                 continue
 
-            legend_labels = legend_labels + [route_name]
+            legend_labels.append(route_name.upper())
             smoothed_data = csaps.csaps(date_ords, self.data[:, filt], p, date_ords)
             smoothed_data[smoothed_data < 0] = 0
 
@@ -144,13 +145,81 @@ class bus:
             y = y / np.sum(y)
             x = np.fft.rfftfreq(time_x.size, 1)
 
-            legend_labels = legend_labels + [route_name]
+            legend_labels.append(route_name)
             line = plt.plot(x, y, axes=ax, gid=route_name)
             lines = lines + line
 
         plt.legend(legend_labels)
+        ax.hold(False) # TODO: keep the setting that it had...
 
         return ax, lines
+
+    def detect_change(self, route):
+        """
+        Returns a list of dates when the specified route underwent
+        a "significant service change". A significant service change
+        is defined as the non-zero riderships of the next 12 months
+        being statistically significantly different from the previous
+        12 months. Note that this does not capture a change in a bus
+        that goes from running every day to only week-days, but
+        keeping a relatively constant amount on week-days.
+
+        We only test for difference at the start of a month, and if
+        a year is flagged as different then every other month in that
+        year is not tested for another change.
+        """
+        if type(route) is str:
+            route = base36.tobase10(route)
+        else:
+            route = base36.tobase10(str(int(route)))
+        route_idx = np.nonzero(self.routes == route)[0]
+
+        changes = []
+        d_changes = []
+        p_vals = []
+        d_p_vals = []
+
+        win = 365
+
+        for i, d in enumerate(self.dates):
+            if i < win or i >= len(self.dates) - win:
+                continue
+            if udt.dt(d).day == 1:
+                prev_yr = self.data[i-win+1:i+1, route_idx]
+                curr_yr = self.data[i:i+win, route_idx]
+                # TODO: explain why plus 1
+
+                p = scipy.stats.ks_2samp(curr_yr.flatten(), prev_yr.flatten())[1]
+                p_vals.append(p)
+                d_p_vals.append(udt.dt(d))
+                if p < 1e-6:
+                    changes.append(p)
+                    d_changes.append(udt.dt(d))
+                #print(str(udt.dt(d)) + ' : ' + str(md))
+        changes = np.array(changes)
+        loc_mins = np.r_[True, changes[1:] < changes[:-1]] & np.r_[changes[:-1] < changes[1:], True]
+        d_changes = np.array(d_changes)[loc_mins].tolist()
+        changes = changes[loc_mins].tolist()
+
+        return d_changes, changes, d_p_vals, p_vals
+
+    def show_changes(self, route):
+        """
+        Plot where changes have been detected
+        """
+        d_changes, changes, d_p_vals, p_vals = self.detect_change(route)
+
+        fig, axes = plt.subplots(2, 1, sharex=True)
+
+        self.plot_routes(route, .01, ax=axes[0])
+        color = next(axes[0]._get_lines.color_cycle)
+        for d in d_changes:
+            yl = axes[0].get_ylim()
+            axes[0].plot([d, d], yl, color=color)
+        axes[0].legend(['bus', 'changes'])
+
+        # TODO: plot the cut-off p-value that I'm using
+        axes[1].semilogy(d_p_vals, p_vals)
 
     def routes_to_base36(self):
         """
@@ -188,7 +257,7 @@ class bus:
             i = 0
             while line[0] != '':
                 data[i, 0] = base36.tobase10(line[0])
-                data[i, 1] = unix_datetime.ut((datetime.strptime(line[1], '%m/%d/%Y')))
+                data[i, 1] = udt.ut((datetime.strptime(line[1], '%m/%d/%Y')))
                 data[i, 2] = base36.tobase10(line[2])
                 data[i, 3] = int(line[3])
                 i = i + 1
@@ -240,7 +309,7 @@ class train:
         if not isinstance(stops, (list, np.ndarray)):
             stops = [stops]
 
-        dates     = map(lambda x: unix_datetime.dt(x), self.dates)
+        dates     = map(lambda x: udt.dt(x), self.dates)
         date_ords = map(lambda x: x.toordinal(), dates)
 
         station_names          = map(lambda x: x[3].lower(), self.stop_data)
@@ -275,7 +344,7 @@ class train:
 
             station_name = self.station_name(map_id, 1)
 
-            legend_labels = legend_labels + [station_name]
+            legend_labels.append(station_name)
             smoothed_data = csaps.csaps(date_ords, self.data[:, filt].sum(axis=1), p, date_ords)
             smoothed_data[smoothed_data < 0] = 0
             line = plt.plot(dates, smoothed_data,
@@ -348,7 +417,7 @@ class train:
             y = y / np.sum(y)
             x = np.fft.rfftfreq(time_x.size, 1)
 
-            legend_labels = legend_labels + [station_name]
+            legend_labels.append(station_name)
             line = plt.plot(x, y, axes=ax, gid=station_name)
             lines = lines + line
 
@@ -408,7 +477,7 @@ class train:
             i = 0
             while line[0] != '':
                 data[i, 0] = int(line[0])
-                data[i, 1] = unix_datetime.ut(datetime.strptime(line[2], '%m/%d/%Y'))
+                data[i, 1] = udt.ut(datetime.strptime(line[2], '%m/%d/%Y'))
                 data[i, 2] = base36.tobase10(line[3])
                 data[i, 3] = int(line[4])
                 i = i + 1
