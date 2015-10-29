@@ -57,9 +57,11 @@ class bus:
         dates = map(lambda x: udt.dt(x), self.dates)
         date_ords = map(lambda x: x.toordinal(), dates)
 
+        stack_skip_size = 1
+
         legend_labels = []
         if stacked:
-            y = np.tile(np.nan, (len(dates), len(routes)))
+            y = np.tile(np.nan, (len(dates[0::stack_skip_size]), len(routes)))
             stack_idx = 0
         for route in routes:
             ax.hold(True)
@@ -76,7 +78,7 @@ class bus:
                 continue
 
             legend_labels.append(route_name.upper())
-            smoothed_data = csaps.csaps(date_ords, self.data[:, filt], p, date_ords)
+            smoothed_data = csaps.csaps(date_ords, self.data[:, filt], p, date_ords[0::stack_skip_size])
             smoothed_data[smoothed_data < 0] = 0
 
             if stacked:
@@ -86,16 +88,16 @@ class bus:
                 ax.plot(dates, smoothed_data, gid=route_name)
 
         if stacked:
-            poly_collections = ax.stackplot(dates, y.T, baseline='zero', linewidth=0)
+            poly_collections = ax.stackplot(dates[0::stack_skip_size], y.T, baseline='zero', linewidth=0)
             legend_proxies = []
             for i, poly in enumerate(poly_collections):
                 poly.set_gid(legend_labels[i])
                 legend_proxies.append(plt.Rectangle((0, 0), 1, 1, fc=poly.get_facecolor()[0]))
-            ax.legend(legend_proxies, legend_labels, ncol=max([(len(routes)/30), 1]),
-                      bbox_to_anchor=[1, .5], loc='center left')
-        else:
-            ax.legend(legend_labels, ncol=max([(len(routes)/30), 1]),
-                      bbox_to_anchor=[1, .5], loc='center left')
+#            ax.legend(legend_proxies, legend_labels, ncol=max([(len(routes)/30), 1]),
+#                      bbox_to_anchor=[1, .5], loc='center left')
+#        else:
+#            ax.legend(legend_labels, ncol=max([(len(routes)/30), 1]),
+#                      bbox_to_anchor=[1, .5], loc='center left')
 
         return ax
 

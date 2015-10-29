@@ -78,7 +78,7 @@ backend      : qt4agg
 ### LINES
 # See http://matplotlib.org/api/artist_api.html#module-matplotlib.lines for more
 # information on line properties.
-#lines.linewidth   : 1.0     # line width in points
+lines.linewidth   : 2.0     # line width in points
 #lines.linestyle   : -       # solid line
 #lines.color       : blue    # has no affect on plot(); see axes.color_cycle
 #lines.marker      : None    # the default marker
@@ -267,7 +267,7 @@ font.sans-serif     : Arial, Helvetica, Bitstream Vera Sans, Lucida Grande, Verd
 #axes.unicode_minus  : True    # use unicode for the minus symbol
                                # rather than hyphen.  See
                                # http://en.wikipedia.org/wiki/Plus_and_minus_signs#Character_codes
-axes.color_cycle    : 3B85BA, 8E3749, B3771B, B28CA7, 5A7D33, B15B40, 667562  # color cycle for plot lines
+axes.color_cycle    : 435b93, 8d1b1b, 236515, dc4204, 9e8100, 801b8d, 288a7c, bc3488, 333333  # color cycle for plot lines
                                             # as list of string colorspecs:
                                             # single letter, long name, or
                                             # web-style hex
@@ -336,7 +336,7 @@ figure.facecolor : 0.90    # figure facecolor; 0.75 is scalar gray
 #figure.edgecolor : white   # figure edgecolor
 #figure.autolayout : False  # When True, automatically adjust subplot
                             # parameters to make the plot fit the figure
-#figure.max_open_warning : 20  # The maximum number of figures to open through
+figure.max_open_warning : -1  # The maximum number of figures to open through
                                # the pyplot interface before emitting a warning.
                                # If less than one this feature is disabled.
 

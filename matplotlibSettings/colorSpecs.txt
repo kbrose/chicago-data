@@ -1,8 +1,9 @@
 use on black background: 66C2A5, FC8D62, 8DA0CB, E78AC3, A6D854, FFD92F, A07364, 533E79, B54F67
     This is modified from color brewer
-use on white background: 1b9e77, d95f02, 7570b3, e7298a, 66a61e, e6ab02, a6761d
-    This is straight from color brewer
+
+use on white background: 435b93, 8d1b1b, 236515, dc4204, 9e8100, 801b8d, 288a7c, bc3488, 333333
+    This is modified from the modified color brewer colors above
+
 matlab's default R2014b or greater: 0070B9, D55119, E8AE1F, 7C2E8B, 75A92F, 4BBAE9, 9F142E
-
-
+    Might be copyrighted? Hard to tell for this set of 7 colors, but their new (continuous) color map is: http://blogs.mathworks.com/steve/2014/10/20/a-new-colormap-for-matlab-part-2-troubles-with-rainbows/ (comments 6 and 7)
 
