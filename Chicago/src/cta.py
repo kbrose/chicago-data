@@ -13,7 +13,8 @@ import matplotlib.pyplot as plt
 import csaps
 import re
 import scipy.stats
-
+import seaborn as sns
+sns.set(style="darkgrid", palette="Set2")
 
 class bus:
     """
@@ -86,6 +87,11 @@ class bus:
                 stack_idx += 1
             else:
                 ax.plot(dates, smoothed_data, gid=route_name)
+
+            n = len(smoothed_data)
+            reshaped_data = np.reshape(smoothed_data[0:n-np.mod(n,365)], [365, n/365])
+            plt.figure()
+            sns.tsplot([reshaped_data[:,i] for i in range(len(smoothed_data)/365)], ci=[5, 25, 50, 75, 95, 99])
 
         if stacked:
             poly_collections = ax.stackplot(dates[0::stack_skip_size], y.T, baseline='zero', linewidth=0)
