@@ -13,8 +13,9 @@ import matplotlib.pyplot as plt
 import csaps
 import re
 import scipy.stats
-import seaborn as sns
 import itertools
+import pandas as pd
+import seaborn as sns
 #sns.set(style="darkgrid", palette="Set2")
 
 class bus:
@@ -27,85 +28,70 @@ class bus:
         """
         Loads the data from the CSV files
         """
-        raw_data, raw_labels = self.__read_bus_data(filename)
-        self.data, self.dates, self.routes = self.__generate_data_by_day(raw_data, raw_labels)
+        self.data = self.__read_bus_data(filename)
 
-    def plot_routes(self, routes, p=1, stacked=False, ax=None):
+    def plot_routes(self, routes, resamp=None, fillzero=False, stacked=False, ax=None):
         """
         Plots all specified routes on the same axis.
 
         Parameters
         ----------
-        routes : list of routes, can be integers or strings, i.e. [2, 6, 'x28']
-        p      : smoothing parameter, 0 <= p <= 1, lower values result in more
-                 smoothing. See csaps.
-                 DEFAULT: p = 1 for perfect interpolation
-        ax     : axes object to plot to.
-                 DEFAULT: ax = None
-        stacked: True to produce a stacked area plot showing total amounts as well
-                 as individual route contributions.
+        routes   : list of routes, can be integers or strings, i.e. [2, 6, 'x28']
+        resamp   : String representing how to downsample for plotting. Use 'W' for
+                   weekly, 'M' for monthly, 'Q' for quarterly, or 'AS' for yearly.
+                   DEFAULT: resamp = None # no resampling
+        fillzero : Set to True to fill in missing ridership data with 0. Data is
+                   considered missing for any day the bus was not running.
+                   This can include weekends for commuter buses, or times when
+                   the bus route did not exist.
+                   DEFAULT: fillzero = False
+        stacked  : True to produce a stacked area plot showing total amounts as
+                   well as individual route contributions.
+                   http://pandas.pydata.org/pandas-docs/stable/timeseries.html#offset-aliases
+        ax       : axes object to plot to.
+                   DEFAULT: ax = None
 
         Returns
         -------
         ax : axes object the object was plotted on
         """
+        # create new figure if no axis provided
         if ax is None:
             fig = plt.figure()
             ax = fig.add_subplot(111)
 
+        # be flexible with "scalar" inputs
         if not isinstance(routes, (list, np.ndarray)):
             routes = [routes]
 
-        palette = itertools.cycle(sns.color_palette())
+        # resample and fill missing with 0 as necessary
+        data = self.data.copy()
+        if fillzero:
+            data.fillna(value=0, inplace=True)
+        if resamp is not None:
+            data = data.resample(resamp) # mean resampling is default
 
-        dates = map(lambda x: udt.dt(x), self.dates)
-        date_ords = map(lambda x: x.toordinal(), dates)
+        # Convert routes to strings if they are not already
+        routes = map(lambda x: str(x).upper(), routes)
 
-        stack_skip_size = 1
+        # make sure route is valid
+        for i in xrange(len(routes)):
+            route = routes[i]
+            if route not in data.columns:
+                print('Invalid route ' + route + ', check data.rotues() for complete list')
+                del(routes[routes.index(route)])
 
-        legend_labels = []
+        # do this awful mess  to deal with stacked plot legends not showing up
         if stacked:
-            y = np.tile(np.nan, (len(dates[0::stack_skip_size]), len(routes)))
-            stack_idx = 0
-        for route in routes:
-            ax.hold(True)
-            if type(route) is str:
-                route_name = route
-                route = base36.tobase10(route)
-            else:
-                route_name = str(route)
-                route = base36.tobase10(str(int(route)))
-
-            filt = self.routes == route
-            if not filt.any():
-                print('Route ' + route_name + ' appears to not exist.')
-                continue
-
-            legend_labels.append(route_name.upper())
-            smoothed_data = csaps.csaps(date_ords, self.data[:, filt], p, date_ords[0::stack_skip_size])
-            smoothed_data[smoothed_data < 0] = 0
-
-            if stacked:
-                y[:,stack_idx] = smoothed_data
-                stack_idx += 1
-            else:
-                n = len(smoothed_data)
-                reshaped_data = np.reshape(smoothed_data[0:n-np.mod(n,365)], [n/365, 365]).T
-                sns.tsplot([reshaped_data[:,i] for i in range(len(smoothed_data)/365)],
-                            ci=[99], ax=ax, color=next(palette))
-                #ax.plot(dates, smoothed_data, gid=route_name)
-
-        if stacked:
-            poly_collections = ax.stackplot(dates[0::stack_skip_size], y.T, baseline='zero', linewidth=0)
+            poly_collections = ax.stackplot(data.index, data[routes].T, linewidth=0)
             legend_proxies = []
             for i, poly in enumerate(poly_collections):
-                poly.set_gid(legend_labels[i])
+                # poly.set_gid(legend_labels[i])
                 legend_proxies.append(plt.Rectangle((0, 0), 1, 1, fc=poly.get_facecolor()[0]))
-#            ax.legend(legend_proxies, legend_labels, ncol=max([(len(routes)/30), 1]),
-#                      bbox_to_anchor=[1, .5], loc='center left')
-#        else:
-#            ax.legend(legend_labels, ncol=max([(len(routes)/30), 1]),
-#                      bbox_to_anchor=[1, .5], loc='center left')
+            ax.legend(legend_proxies, routes, ncol=max([(len(routes)/30), 1]),
+                      bbox_to_anchor=[1, .5], loc='center left')
+        else:
+            data[routes].plot(ax=ax)
 
         return ax
 
@@ -113,8 +99,8 @@ class bus:
         """
         Plot the [discrete/fast] fourier transform of bus riderships per day
         for all the specified routes on the optionally specified axis. The FFT
-        is normalized so that it sums to 1 so that different routes can be
-        compared more meaningfully.
+        is normalized to sum to 1 so that different routes can be compared
+        more meaningfully.
 
         Parameters
         ----------
@@ -231,49 +217,19 @@ class bus:
         # TODO: plot the cut-off p-value that I'm using
         axes[1].semilogy(d_p_vals, p_vals)
 
-    def routes_to_base36(self):
+    def routes(self):
         """
-        Returns the routes in base 36, i.e. the normal, human-readable
-        format. This is useful for plotting all routes:
-
-        >>> import cta
-        >>> bus = cta.bus()
-        >>> bus.plot_routes(bus.routes_to_base36(), .01)
-        >>> bus.plot_fft(bus.routes_to_base36())
+        Returns a list of routes as strings.
         """
-        return map(lambda x: base36.tobase36(x), self.routes)
-
-    def __generate_data_by_day(self, raw_data, raw_labels):
-        routes = np.unique(raw_data[:, 0])
-        dates = np.unique(raw_data[:, 1])
-        dataByDay = np.zeros([len(dates), len(routes)])
-        idx = 0
-        L = raw_data.shape[0]
-        for dateIdx, date in enumerate(dates):
-            while idx < L and raw_data[idx, 1] == date:
-                routeNumIdx = np.nonzero(routes == raw_data[idx, 0])[0]
-                dataByDay[dateIdx, routeNumIdx] = raw_data[idx, 3]
-                idx = idx + 1
-        return dataByDay, dates, routes
+        return self.data.columns.tolist()[1:] # gets rid of "daytype" col
 
     def __read_bus_data(self, filename='../data/bus_route_daily_totals.csv'):
-        num_lines = sum(1 for line in open(filename))
-
-        with open(filename) as f:
-            line = f.readline().strip()
-            labels = line.split(',')
-            line = f.readline().strip().split(',')
-            data = np.zeros([num_lines-1, 4])
-            i = 0
-            while line[0] != '':
-                data[i, 0] = base36.tobase10(line[0])
-                data[i, 1] = udt.ut((datetime.strptime(line[1], '%m/%d/%Y')))
-                data[i, 2] = base36.tobase10(line[2])
-                data[i, 3] = int(line[3])
-                i = i + 1
-                line = f.readline().strip().split(',')
-            return data, labels
-
+        data = pd.read_csv(filename,parse_dates=[1])
+        daytypes = data.drop_duplicates(subset='date')['daytype']
+        data = data.pivot(index='date', columns='route', values='rides')
+        data.insert(0,0,daytypes)
+        data.rename(columns={0:'daytype'}, inplace=True)
+        return data
 
 class train:
     """
