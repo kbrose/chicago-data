@@ -352,6 +352,8 @@ class train:
         """
 
         data = self.stop_data.copy()
+        cols = self.data.columns[1:]
+        col_num = map(lambda x: int(x[0:5]), cols)
 
         try:
             if type(stop) is str:
@@ -363,8 +365,8 @@ class train:
                 stop_num = stop
             map_id_equal = data['MAP_ID'] == stop_num
             if any(map_id_equal):
-                occurences = data[map_id_equal].iloc[0]
-                return str(occurences['MAP_ID']) + ': ' + occurences['STATION_NAME']
+                occurence = data[map_id_equal].iloc[0]
+                return cols[col_num.index(occurence['MAP_ID'])]
         except (TypeError, ValueError):
             pass
 
@@ -372,27 +374,27 @@ class train:
         try:
             stop_descriptive_name_equal = data['lower_case_column'] == stop.lower()
             if any(stop_descriptive_name_equal):
-                occurences = data[stop_descriptive_name_equal].iloc[0]
-                return str(occurences['MAP_ID']) + ': ' + occurences['STATION_NAME']
-        except (TypeError, AttributeError):
+                occurence = data[stop_descriptive_name_equal].iloc[0]
+                return cols[col_num.index(occurence['MAP_ID'])]
+        except (TypeError, AttributeError, ValueError):
             pass
 
         data['lower_case_column'] = data['STATION_NAME'].map(lambda x: x.lower())
         try:
             station_name_equal = data['lower_case_column'] == stop.lower()
             if any(station_name_equal):
-                occurences = data[station_name_equal].iloc[0]
-                return str(occurences['MAP_ID']) + ': ' + occurences['STATION_NAME']
-        except (TypeError, AttributeError):
+                occurence = data[station_name_equal].iloc[0]
+                return cols[col_num.index(occurence['MAP_ID'])]
+        except (TypeError, AttributeError, ValueError):
             pass
 
         data['lower_case_column'] = data['STOP_NAME'].map(lambda x: x.lower())
         try:
             stop_name_equal = data['lower_case_column'] == stop.lower()
             if any(stop_name_equal):
-                occurences = data[stop_name_equal].iloc[0]
-                return str(occurences['MAP_ID']) + ': ' + occurences['STATION_NAME']
-        except (TypeError, AttributeError):
+                occurence = data[stop_name_equal].iloc[0]
+                return cols[col_num.index(occurence['MAP_ID'])]
+        except (TypeError, AttributeError, ValueError):
             pass
 
         return False
