@@ -5,18 +5,10 @@ Created on Tue Sep 29 22:59:45 2015
 @author: Kevin
 """
 
-import base36
 import numpy as np
-from datetime import datetime
-import unix_datetime as udt
 import matplotlib.pyplot as plt
-import csaps
-import re
-import scipy.stats
-import itertools
 import pandas as pd
-import seaborn as sns
-#sns.set(style="darkgrid", palette="Set2")
+import os
 
 class bus:
     """
@@ -24,10 +16,14 @@ class bus:
     data pertaining to bus rides broken down by day and route.
     """
 
-    def __init__(self, filename='../data/bus_route_daily_totals.csv'):
+    def __init__(self, filename=None):
         """
-        Loads the data from the CSV files
+        Loads the data from the CSV file. If filename is not given then
+        ../data/bus_route_daily_totals.csv is used.
         """
+        if filename is None:
+            filename = os.path.join(os.path.dirname(__file__),
+                                    '../data/bus_route_daily_totals.csv')
         self.data = self.__read_bus_data(filename)
 
     def plot_routes(self, routes, resamp=None, fillzero=False, stacked=False, ax=None):
@@ -40,6 +36,7 @@ class bus:
         resamp   : String representing how to downsample for plotting. Use 'W' for
                    weekly, 'M' for monthly, 'Q' for quarterly, or 'AS' for yearly.
                    DEFAULT: resamp = None # no resampling
+                   http://pandas.pydata.org/pandas-docs/stable/timeseries.html#offset-aliases
         fillzero : Set to True to fill in missing ridership data with 0. Data is
                    considered missing for any day the bus was not running.
                    This can include weekends for commuter buses, or times when
@@ -47,7 +44,6 @@ class bus:
                    DEFAULT: fillzero = False
         stacked  : True to produce a stacked area plot showing total amounts as
                    well as individual route contributions.
-                   http://pandas.pydata.org/pandas-docs/stable/timeseries.html#offset-aliases
         ax       : axes object to plot to.
                    DEFAULT: ax = None
 
@@ -78,10 +74,13 @@ class bus:
         for i in xrange(len(routes)):
             route = routes[i]
             if route not in data.columns:
-                print('Invalid route ' + route + ', check data.rotues() for complete list')
+                print('Invalid route ' + route + ', check *.rotues() for complete list')
                 del(routes[routes.index(route)])
 
-        # do this awful mess  to deal with stacked plot legends not showing up
+        if not routes:
+            return ax
+
+        # do this awful mess to deal with stacked plot legends not showing up
         if stacked:
             poly_collections = ax.stackplot(data.index, data[routes].T, linewidth=0)
             legend_proxies = []
@@ -112,110 +111,38 @@ class bus:
         Returns
         -------
         ax    : axes object the object was plotted on
-        lines : list of line objects plotted for each route.
         """
         if ax is None:
             fig = plt.figure()
             ax = fig.add_subplot(111)
+        hold = ax._hold
+        ax.hold(True)
 
         if not isinstance(routes, (list, np.ndarray)):
             routes = [routes]
 
+        # fill missing with 0 as necessary
+        data = self.data.copy()
+        data.fillna(value=0, inplace=True)
+
+        # Convert routes to strings if they are not already
+        routes = map(lambda x: str(x).upper(), routes)
+
         legend_labels = []
-        lines = []
         for route in routes:
-            ax.hold(True)
-            if type(route) is not str:
-                route = base36.tobase36(route)
-            route = base36.tobase10(route)
 
-            filt = self.routes == route
-            route_name = base36.tobase36(route)
-
-            if not filt.any():
-                print('Route ' + route_name + ' appears to not exist.')
-                continue
-
-            time_x = self.data[:,filt].squeeze()
+            time_x = data[route]
             y = np.absolute(np.fft.rfft(time_x))
             y = y / np.sum(y)
             x = np.fft.rfftfreq(time_x.size, 1)
 
-            legend_labels.append(route_name)
-            line = plt.plot(x, y, axes=ax, gid=route_name)
-            lines = lines + line
+            legend_labels.append(route)
+            plt.plot(x, y, axes=ax, gid=route)
 
         plt.legend(legend_labels)
-        ax.hold(False) # TODO: keep the setting that it had...
+        ax.hold(hold)
 
-        return ax, lines
-
-    def detect_change(self, route):
-        """
-        Returns a list of dates when the specified route underwent
-        a "significant service change". A significant service change
-        is defined as the non-zero riderships of the next 12 months
-        being statistically significantly different from the previous
-        12 months. Note that this does not capture a change in a bus
-        that goes from running every day to only week-days, but
-        keeping a relatively constant amount on week-days.
-
-        We only test for difference at the start of a month, and if
-        a year is flagged as different then every other month in that
-        year is not tested for another change.
-        """
-        if type(route) is str:
-            route = base36.tobase10(route)
-        else:
-            route = base36.tobase10(str(int(route)))
-        route_idx = np.nonzero(self.routes == route)[0]
-
-        changes = []
-        d_changes = []
-        p_vals = []
-        d_p_vals = []
-
-        win = 365
-
-        for i, d in enumerate(self.dates):
-            if i < win or i >= len(self.dates) - win:
-                continue
-            if udt.dt(d).day == 1:
-                prev_yr = self.data[i-win+1:i+1, route_idx]
-                curr_yr = self.data[i:i+win, route_idx]
-                # TODO: explain why plus 1
-
-                p = scipy.stats.ks_2samp(curr_yr.flatten(), prev_yr.flatten())[1]
-                p_vals.append(p)
-                d_p_vals.append(udt.dt(d))
-                if p < 1e-6:
-                    changes.append(p)
-                    d_changes.append(udt.dt(d))
-                #print(str(udt.dt(d)) + ' : ' + str(md))
-        changes = np.array(changes)
-        loc_mins = np.r_[True, changes[1:] < changes[:-1]] & np.r_[changes[:-1] < changes[1:], True]
-        d_changes = np.array(d_changes)[loc_mins].tolist()
-        changes = changes[loc_mins].tolist()
-
-        return d_changes, changes, d_p_vals, p_vals
-
-    def show_changes(self, route):
-        """
-        Plot where changes have been detected
-        """
-        d_changes, changes, d_p_vals, p_vals = self.detect_change(route)
-
-        fig, axes = plt.subplots(2, 1, sharex=True)
-
-        self.plot_routes(route, .01, ax=axes[0])
-        color = next(axes[0]._get_lines.color_cycle)
-        for d in d_changes:
-            yl = axes[0].get_ylim()
-            axes[0].plot([d, d], yl, color=color)
-        axes[0].legend(['bus', 'changes'])
-
-        # TODO: plot the cut-off p-value that I'm using
-        axes[1].semilogy(d_p_vals, p_vals)
+        return ax
 
     def routes(self):
         """
@@ -223,7 +150,7 @@ class bus:
         """
         return self.data.columns.tolist()[1:] # gets rid of "daytype" col
 
-    def __read_bus_data(self, filename='../data/bus_route_daily_totals.csv'):
+    def __read_bus_data(self, filename):
         data = pd.read_csv(filename,parse_dates=[1])
         daytypes = data.drop_duplicates(subset='date')['daytype']
         data = data.pivot(index='date', columns='route', values='rides')
@@ -237,36 +164,50 @@ class train:
     data pertaining to train rides broken down by day and station.
     """
 
-    def __init__(self, filename='../data/L_station_daily_entry_totals.csv'):
+    def __init__(self, rides_filename=None, station_filename=None):
         """
         Loads the data from CSV files.
         """
-        raw_data, raw_labels = self.__read_train_data(filename)
-        self.data, self.dates, self.stops = self.__generate_data_by_day(raw_data, raw_labels)
-        self.stop_data, self.stop_data_labels = self.__get_L_stop_names()
+        if rides_filename is None:
+            rides_filename = os.path.join(os.path.dirname(__file__),
+                                          '../data/L_station_daily_entry_totals.csv')
+        self.data = self.__read_train_data(rides_filename)
 
-    def plot_stops(self, stops, p=1, ax=None):
+        if station_filename is None:
+            station_filename = os.path.join(os.path.dirname(__file__),
+                                            '../data/L_Stops.csv')
+        self.stop_data = self.__get_L_stop_names(station_filename)
+
+    def plot_stops(self, stops, resamp=None, fillzero=False, stacked=False, ax=None):
         """
         Plots all specified routes on the same axis.
 
         Parameters
         ----------
-        stops  : list of stops, can be either integers corresponding to the
-                 station ID (denoted MAP_ID in self.stop_data_labels) or
-                 a string corresponding to the station name. The station name will
-                 attempt to be matched to the STOP_DESCRIPTIVE_NAME, STATION_NAME, and
-                 STOP_NAME in that order (again, these labels are found
-                 in self.stop_data_labels).
-        p      : smoothing parameter, 0 <= p <= 1, lower values result in more
-                 smoothing. See csaps.
-                 DEFAULT: p = 1 for perfect interpolation
-        ax     : axes object to plot to.
-                 DEFAULT: ax = None
+        stops    : list of stops, can be either integers corresponding to the
+                   station ID (denoted MAP_ID in self.stop_data) or a string
+                   corresponding to the station name. The station name will
+                   attempt to be matched to the STOP_DESCRIPTIVE_NAME, STATION_NAME,
+                   and STOP_NAME in that order (again, these labels are found
+                   in self.stop_data).
+                   See parse_stop for more information
+        resamp   : String representing how to downsample for plotting. Use 'W' for
+                   weekly, 'M' for monthly, 'Q' for quarterly, or 'AS' for yearly.
+                   http://pandas.pydata.org/pandas-docs/stable/timeseries.html#offset-aliases
+                   DEFAULT: resamp = None # no resampling
+        fillzero : Set to True to fill in missing ridership data with 0. Data is
+                   considered missing for any day the train station was not open.
+                   This can include weekends for commuter stations, or times when
+                   the station did not exist.
+                   DEFAULT: fillzero = False
+        stacked  : True to produce a stacked area plot showing total amounts as
+                   well as individual route contributions.
+        ax       : axes object to plot to.
+                   DEFAULT: ax = None
 
         Returns
         -------
-        ax    : axes object the object was plotted on
-        lines : list of line objects for each stop.
+        ax : axes object the object was plotted on
         """
         if ax is None:
             fig = plt.figure()
@@ -275,50 +216,42 @@ class train:
         if not isinstance(stops, (list, np.ndarray)):
             stops = [stops]
 
-        dates     = map(lambda x: udt.dt(x), self.dates)
-        date_ords = map(lambda x: x.toordinal(), dates)
+        # resample and fill missing with 0 as necessary
+        data = self.data.copy()
+        if fillzero:
+            data.fillna(value=0, inplace=True)
+        if resamp is not None:
+            data = data.resample(resamp) # mean resampling is default
 
-        station_names          = map(lambda x: x[3].lower(), self.stop_data)
-        stop_names             = map(lambda x: x[2].lower(), self.stop_data)
-        stop_descriptive_names = map(lambda x: x[4].lower(), self.stop_data)
-        map_ids                = map(lambda x: x[5], self.stop_data)
+        # Convert routes to strings if they are not already
+        stops = map(lambda x: str(x).upper(), stops)
 
-        legend_labels = []
-        lines = []
-        for stop in stops:
-            ax.hold(True)
-
-            if type(stop) is str:
-                stopl = stop.lower()
-                map_id = [map_ids[i] for i, x in enumerate(stop_descriptive_names) if x == stopl]
-                if not map_id:
-                    map_id = [map_ids[i] for i, x in enumerate(stop_names) if x == stopl]
-                    if not map_id:
-                        map_id = [map_ids[i] for i, x in enumerate(station_names) if x == stopl]
-                        if not map_id:
-                            print('Stop "' + stop + '" cannot be found.')
-                            continue
-                map_id = map_id[0]
-                filt = self.stops == map_id
+        # make sure stop is valid
+        for i in xrange(len(stops)):
+            stop = stops[i]
+            stop_col_name = self.parse_stop(stop)
+            if stop_col_name:
+                stops[i] = stop_col_name
             else:
-                filt = self.stops == stop
-                map_id = stop
+                print('Invalid stop ' + stop + ', check *.stops() for complete list')
+                del(stops[stops.index(stop)])
 
-            if not filt.any():
-                print('Stop ' + str(stop) + ' cannot be found.')
-                continue
+        if not stops:
+            return ax
 
-            station_name = self.station_name(map_id, 1)
+        # do this awful mess to deal with stacked plot legends not showing up
+        if stacked:
+            poly_collections = ax.stackplot(data.index, data[stops].T, linewidth=0)
+            legend_proxies = []
+            for i, poly in enumerate(poly_collections):
+                # poly.set_gid(legend_labels[i])
+                legend_proxies.append(plt.Rectangle((0, 0), 1, 1, fc=poly.get_facecolor()[0]))
+            ax.legend(legend_proxies, stops, ncol=max([(len(stops)/30), 1]),
+                      bbox_to_anchor=[1, .5], loc='center left')
+        else:
+            data[stops].plot(ax=ax)
 
-            legend_labels.append(station_name)
-            smoothed_data = csaps.csaps(date_ords, self.data[:, filt].sum(axis=1), p, date_ords)
-            smoothed_data[smoothed_data < 0] = 0
-            line = plt.plot(dates, smoothed_data,
-                            axes=ax, gid=station_name)
-            lines = lines + line
-
-        plt.legend(legend_labels)
-        return ax, lines
+        return ax
 
     def plot_fft(self, stops, ax=None):
         """
@@ -342,151 +275,166 @@ class train:
         if ax is None:
             fig = plt.figure()
             ax = fig.add_subplot(111)
+        hold = ax._hold
+        ax.hold(True)
 
         if not isinstance(stops, (list, np.ndarray)):
             stops = [stops]
 
-        station_names          = map(lambda x: x[3].lower(), self.stop_data)
-        stop_names             = map(lambda x: x[2].lower(), self.stop_data)
-        stop_descriptive_names = map(lambda x: x[4].lower(), self.stop_data)
-        map_ids                = map(lambda x: x[5], self.stop_data)
+        # fill missing with 0 as necessary
+        data = self.data.copy()
+        data.fillna(value=0, inplace=True)
 
         legend_labels = []
-        lines = []
-        for stop in stops:
-            ax.hold(True)
-
-            if type(stop) is str:
-                stopl = stop.lower()
-                map_id = [map_ids[i] for i, x in enumerate(stop_descriptive_names) if x == stopl]
-                if not map_id:
-                    map_id = [map_ids[i] for i, x in enumerate(stop_names) if x == stopl]
-                    if not map_id:
-                        map_id = [map_ids[i] for i, x in enumerate(station_names) if x == stopl]
-                        if not map_id:
-                            print('Stop "' + stop + '" cannot be found.')
-                            continue
-                map_id = map_id[0]
-                filt = self.stops == map_id
-            else:
-                filt = self.stops == stop
-                map_id = stop
-
-            if not filt.any():
-                print('stop ' + str(stop) + ' appears to not exist.')
+        for s in stops:
+            stop = self.parse_stop(s)
+            if not stop:
+                print('Invalid stop ' + str(s) + ', check *.stops() for complete list')
                 continue
-
-            station_name = self.station_name(map_id, 1)
-
-            time_x = self.data[:,filt].squeeze()
+            time_x = data[stop]
             y = np.absolute(np.fft.rfft(time_x))
             y = y / np.sum(y)
             x = np.fft.rfftfreq(time_x.size, 1)
 
-            legend_labels.append(station_name)
-            line = plt.plot(x, y, axes=ax, gid=station_name)
-            lines = lines + line
+            legend_labels.append(stop)
+            plt.plot(x, y, axes=ax, gid=stop)
 
         plt.legend(legend_labels)
+        ax.hold(hold)
 
-        return ax, lines
+        return ax
 
-    def station_name(self, map_id, name_type=1):
+    def get_stop_by_color(self, colors):
         """
-        Returns the station name of the given numerical ID
+        Get a list of stations that have all the specified
+        colors running through it.
 
         Parameters
         ----------
-        map_id :     the numerical ID as listed in the original CSV file.
-        name_type  : type of name to be returned. 0 correponds to
-                     the stop name, 1 corresponds to station name, and 2
-                     corresponds to the descriptive station name.
-                     DEFAULT: name_type = 1
+        colors : List of strings, i.e. 'RED', 'PURPLE'.
 
         Returns
         -------
-        name  : the station name
+        stops : List of stops that have every specified color
         """
-        map_ids = map(lambda x: x[5], self.stop_data)
+        if type(colors) is not list:
+            colors = [colors]
+        colors = map(lambda x: x.upper(), colors)
+        try:
+            grouped = self.stop_data[['MAP_ID', 'STATION_NAME'] + colors].groupby('MAP_ID')
+            grouped = grouped.max() # maximum is basically an "or" of the group
+            filt = grouped[colors.pop()]
+            for c in colors:
+                filt = filt & grouped[c]
+            data = grouped[filt].reset_index(level=0)
+        except KeyError:
+            print('Unexpected color, try *.stop_data.columns[7:-1] for complete list')
+            return None
+        return (data['MAP_ID'].map(lambda x: str(x)) + ': ' + data['STATION_NAME']).tolist()
+
+
+    def parse_stop(self, stop):
+        """
+        Parses a stop ID or name into a standard format.
+
+        Parameters
+        ----------
+        stop : list of stops, can be either integers corresponding to the
+               station ID (denoted MAP_ID in self.stop_data) or
+               a string corresponding to the station name. The station name will
+               attempt to be matched to the STOP_DESCRIPTIVE_NAME, STATION_NAME, and
+               STOP_NAME in that order (again, these labels are found
+               in self.stop_data).
+
+        Returns
+        -------
+        String in the format "MAP_ID: STATION_NAME" matching the column name in self.data
+        """
+
+        data = self.stop_data.copy()
 
         try:
-            i = map_ids.index(int(map_id))
-        except ValueError:
-            print('Cannot find a match for ' + str(map_id))
-            return ''
+            if type(stop) is str:
+                if len(stop) > 5:
+                    stop_num = int(stop[0:5])
+                else:
+                    stop_num = int(stop)
+            else:
+                stop_num = stop
+            map_id_equal = data['MAP_ID'] == stop_num
+            if any(map_id_equal):
+                occurences = data[map_id_equal].iloc[0]
+                return str(occurences['MAP_ID']) + ': ' + occurences['STATION_NAME']
+        except (TypeError, ValueError):
+            pass
 
-        names = map(lambda x: x[2+name_type], self.stop_data)
+        data['lower_case_column'] = data['STATION_DESCRIPTIVE_NAME'].map(lambda x: x.lower())
+        try:
+            stop_descriptive_name_equal = data['lower_case_column'] == stop.lower()
+            if any(stop_descriptive_name_equal):
+                occurences = data[stop_descriptive_name_equal].iloc[0]
+                return str(occurences['MAP_ID']) + ': ' + occurences['STATION_NAME']
+        except (TypeError, AttributeError):
+            pass
 
-        return names[i]
+        data['lower_case_column'] = data['STATION_NAME'].map(lambda x: x.lower())
+        try:
+            station_name_equal = data['lower_case_column'] == stop.lower()
+            if any(station_name_equal):
+                occurences = data[station_name_equal].iloc[0]
+                return str(occurences['MAP_ID']) + ': ' + occurences['STATION_NAME']
+        except (TypeError, AttributeError):
+            pass
 
-    def __generate_data_by_day(self, raw_data, raw_labels):
-            stationNumbers = np.unique(raw_data[:, 0])
-            dates = np.unique(raw_data[:, 1])
-            dataByDay = np.zeros([len(dates), len(stationNumbers)])
-            idx = 0
-            L = raw_data.shape[0]
-            for dateIdx, date in enumerate(dates):
-                while idx < L and raw_data[idx, 1] == date:
-                    stationNumberIdx = np.nonzero(stationNumbers == raw_data[idx, 0])[0]
-                    dataByDay[dateIdx, stationNumberIdx] = raw_data[idx, 3]
-                    idx = idx + 1
-            return dataByDay, dates, stationNumbers
+        data['lower_case_column'] = data['STOP_NAME'].map(lambda x: x.lower())
+        try:
+            stop_name_equal = data['lower_case_column'] == stop.lower()
+            if any(stop_name_equal):
+                occurences = data[stop_name_equal].iloc[0]
+                return str(occurences['MAP_ID']) + ': ' + occurences['STATION_NAME']
+        except (TypeError, AttributeError):
+            pass
 
-    def __read_train_data(self, filename='../data/L_station_daily_entry_totals.csv'):
-        num_lines = sum(1 for line in open(filename))
+        return False
 
-        with open(filename) as f:
-            line = f.readline().strip()
-            labels = line.split(',')
-            line = f.readline().strip().split(',')
-            data = np.zeros([num_lines-1, 4])
-            i = 0
-            while line[0] != '':
-                data[i, 0] = int(line[0])
-                data[i, 1] = udt.ut(datetime.strptime(line[2], '%m/%d/%Y'))
-                data[i, 2] = base36.tobase10(line[3])
-                data[i, 3] = int(line[4])
-                i = i + 1
-                line = f.readline().strip().split(',')
-            return data, labels
+    def stops(self):
+        """
+        Returns a list of all of the available stops.
+        """
+        return self.data.columns.tolist()[1:]
 
-    def __get_L_stop_names(self, filename='../data/L_Stops.csv'):
-        with open(filename) as f:
-            labels = self.__parse_l_stops_list_line(f.readline().strip())
-            line = self.__parse_l_stops_list_line(f.readline().strip())
-            data = []
-            while line[0] != '':
-                stop_id                  = int(line[0])
-                direction_id             = line[1]
-                stop_name                = line[2]
-                station_name             = line[3]
-                station_descriptive_name = line[4]
-                map_id                   = int(line[5])
-                ada                      = self.__true_or_false(line[6])
-                red                      = self.__true_or_false(line[7])
-                blue                     = self.__true_or_false(line[8])
-                g                        = self.__true_or_false(line[9])
-                brn                      = self.__true_or_false(line[10])
-                p                        = self.__true_or_false(line[11])
-                pexp                     = self.__true_or_false(line[12])
-                y                        = self.__true_or_false(line[13])
-                pnk                      = self.__true_or_false(line[14])
-                o                        = self.__true_or_false(line[15])
-                location                 = line[16]
-                data = data + [[stop_id, direction_id, stop_name, station_name,
-                                station_descriptive_name, map_id, ada, red, blue,
-                                g, brn, p, pexp, y, pnk, o, location]]
-                line = self.__parse_l_stops_list_line(f.readline().strip())
-            return data, labels
+    def __read_train_data(self, filename):
+        data = pd.read_csv(filename, parse_dates=[2])
 
-    def __true_or_false(self, txt):
-        txtl = txt.lower()
-        if txtl == 'true':
-            return True
-        elif txtl == 'false':
-            return False
-        else:
-            raise(ValueError('Must be "true" or "false", given' + txtl))
+        # Combine the ID and station-name fields into one column
+        ids = data['station_id'].map(lambda x: str(x))
+        names = data['station_name']
+        id_names = ids + ': ' + names
+        data.drop(['station_id', 'station_name'], inplace=True, axis=1)
+        data['station_id_name'] = id_names
 
-    def __parse_l_stops_list_line(self, txt):
-        return [x.strip('"') for x in re.split(r",+(?=[^()]*(?:\(|$))", txt)]
+        # Save the daytypes
+        daytypes = data.drop_duplicates(subset='date')['daytype']
+
+        # Pivot, insert the daytypes back in
+        data = data.pivot_table(index='date', columns='station_id_name', values='rides')
+        data.insert(0,0,daytypes)
+        data.rename(columns={0:'daytype'}, inplace=True)
+        return data
+
+
+    def __get_L_stop_names(self, filename):
+        data = pd.read_csv(filename)
+
+        # Convert this from string "(x,y)" to actual tuple
+        data['Location'] = data['Location'].map(lambda x:
+            (float(x[1:-1].split(',')[0]), float(x[1:-1].split(',')[1])))
+
+        # Rename those awful default names
+        data.rename(columns={'G':'GREEN', 'BRN':'BROWN', 'P':'PURPLE',
+                             'Pexp':'PINK_EXPRESS', 'Y':'YELLOW',
+                             'Pnk':'PINK', 'O':'ORANGE'},
+                    inplace=True)
+
+        return data
+
