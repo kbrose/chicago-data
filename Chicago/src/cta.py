@@ -330,7 +330,7 @@ class train:
         except KeyError:
             print('Unexpected color, try *.stop_data.columns[7:-1] for complete list')
             return None
-        return (data['MAP_ID'].map(lambda x: str(x)) + ': ' + data['STATION_NAME']).tolist()
+        return data['MAP_ID'].map(lambda x: self.parse_stop(x)).tolist()
 
 
     def parse_stop(self, stop):
