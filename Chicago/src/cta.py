@@ -9,6 +9,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 import os
+import pykml
 
 class bus:
     """
@@ -150,7 +151,52 @@ class bus:
         """
         return self.data.columns.tolist()[1:] # gets rid of "daytype" col
 
-    def __read_bus_data(self, filename):
+    def route_shapes(self, filename=None):
+        '''
+        Returns a set of shapes (i.e. list of (lat,lon) coordinate pairs)
+        describing the bus routes. The expected input is a KML file with a
+        similar structure as ../data/CTABusRoutes.kml
+
+        Parameters
+        ----------
+        filename : path to the .kml file that should be parsed.
+                   DEFAULT: ../data/CTABusRoutes.kml
+
+        Returns
+        -------
+        route_coords : A dictionary of shapes for bus routes. The keys
+                       the bus route names and the values are lists of
+                       lists of (lat,lon) pairs. A bus route can have
+                       multiple lists of (lat,lon) pairs since there
+                       can be different sub-routes (i.e. going in
+                       different directions, only going part of the
+                       full route, etc.)
+        '''
+        if filename is None:
+            filename = os.path.join(os.path.dirname(__file__),
+                                    '../data/CTABusRoutes.kml')
+
+        with open(filename, 'r') as f:
+            root = pykml.parser.fromstring(f.read())
+
+        route_coords = {}
+        for route in root.Document.Folder.iterchildren():
+            if 'Placemark' in route.tag:
+                name = str(route.name)
+                line_strings = route.MultiGeometry.getchildren()
+                coords = [l.coordinates.text for l in line_strings]
+                route_coords[name] = map(lambda x: self.__parse_coords(x), coords)
+        return route_coords
+
+    @staticmethod
+    def __parse_coords(coords_text):
+        coords = coords_text.split(' ')[1:]
+        coords = map(lambda c: c.split(',')[0:2], coords)
+        coords = map(lambda xy_pair: [float(c) for c in xy_pair[::-1]], coords)
+        return coords
+
+    @staticmethod
+    def __read_bus_data(filename):
         data = pd.read_csv(filename,parse_dates=[1])
         daytypes = data.drop_duplicates(subset='date')['daytype']
         data = data.pivot(index='date', columns='route', values='rides')
@@ -405,7 +451,8 @@ class train:
         """
         return self.data.columns.tolist()[1:]
 
-    def __read_train_data(self, filename):
+    @staticmethod
+    def __read_train_data(filename):
         data = pd.read_csv(filename, parse_dates=[2])
 
         # Combine the ID and station-name fields into one column
@@ -424,8 +471,8 @@ class train:
         data.rename(columns={0:'daytype'}, inplace=True)
         return data
 
-
-    def __get_L_stop_names(self, filename):
+    @staticmethod
+    def __get_L_stop_names(filename):
         data = pd.read_csv(filename)
 
         # Convert this from string "(x,y)" to actual tuple
