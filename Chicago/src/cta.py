@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import os
 import pykml.parser
+import dateparsing
 
 class bus:
     """
@@ -145,11 +146,26 @@ class bus:
 
         return ax
 
+    def plot_route_shapes(self, routes):
+        plt.figure()
+        shapes = self.route_shapes()
+        if type(routes) is not list:
+            routes = [routes]
+        cmap = plt.get_cmap('Dark2', len(routes))
+        for idx, route in enumerate(routes):
+            r = str(route).upper()
+            if r not in shapes.keys():
+                print 'route ' + r + ' was not found in the shapefile.'
+                continue
+            for i in range(shapes[r].shape[0]):
+                plt.plot(shapes[r][i,:,1], shapes[r][i,:,0], color=cmap(idx))
+        plt.axes().set_aspect('equal', 'datalim')
+
     def routes(self):
         """
         Returns a list of routes as strings.
         """
-        return self.data.columns.tolist()[1:] # gets rid of "daytype" col
+        return self.data.columns.tolist()[1:] # [1:] gets rid of "daytype" col
 
     def route_shapes(self, filename=None):
         '''
@@ -185,23 +201,35 @@ class bus:
                 name = str(route.name)
                 line_strings = route.MultiGeometry.getchildren()
                 coords = [l.coordinates.text for l in line_strings]
-                route_coords[name] = map(lambda x: self.__parse_coords(x), coords)
-        return route_coords
 
-    def plot_route_shapes(self, routes):
-        plt.figure()
-        shapes = self.route_shapes()
-        if type(routes) is not list:
-            routes = [routes]
-        cmap = plt.get_cmap('Dark2', len(routes))
-        for idx, route in enumerate(routes):
-            r = str(route).upper()
-            if r not in shapes.keys():
-                print 'route ' + r + ' was not found in the shapefile.'
-                continue
-            for i in range(len(shapes[r])):
-                plt.plot(shapes[r][i][:,1], shapes[r][i][:,0], color=cmap(idx))
-        plt.axes().set_aspect('equal', 'datalim')
+                # Convert string to numpy array
+                coords = map(lambda x: self.__parse_coords(x), coords)
+
+                # Change from lists of points to lists of line segments
+                for i, arr in enumerate(coords):
+                    coords[i] = [np.array(arr[j:j+2,:]) for j in range(len(arr)-1)]
+
+                # Flatten the list of line segments
+                coords = np.array([item for sublist in coords for item in sublist])
+
+                # Flatten out the line segments from 2x2 to 4x1
+                coords = np.array(map(lambda x: x.flatten(), coords))
+
+                # Remove duplicates
+                # Why oh why does numpy unique not have an axis argument...
+                b = np.ascontiguousarray(coords).view(
+                        np.dtype((np.void, coords.dtype.itemsize * coords.shape[1])))
+                _, idx = np.unique(b, return_index=True)
+                l1 = len(coords)
+                coords = coords[idx]
+                if len(coords) != l1:
+                    print(name + ' ' + str(l1 - len(coords)))
+
+                coords = np.array(map(lambda x: x.reshape((2,2)), coords))
+
+                route_coords[name] = coords
+
+        return route_coords
 
     @staticmethod
     def __parse_coords(coords_text):
@@ -212,12 +240,14 @@ class bus:
 
     @staticmethod
     def __read_bus_data(filename):
-        data = pd.read_csv(filename,parse_dates=[1])
+        data = pd.read_csv(filename)
+        data['date'] = dateparsing.lookup(data['date'])
         daytypes = data.drop_duplicates(subset='date')['daytype']
         data = data.pivot(index='date', columns='route', values='rides')
         data.insert(0,0,daytypes)
         data.rename(columns={0:'daytype'}, inplace=True)
         return data
+
 
 class train:
     """
@@ -468,7 +498,8 @@ class train:
 
     @staticmethod
     def __read_train_data(filename):
-        data = pd.read_csv(filename, parse_dates=[2])
+        data = pd.read_csv(filename)
+        data['date'] = dateparsing.lookup(data['date'])
 
         # Combine the ID and station-name fields into one column
         ids = data['station_id'].map(lambda x: str(x))
