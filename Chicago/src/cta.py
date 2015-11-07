@@ -206,26 +206,12 @@ class bus:
                 coords = map(lambda x: self.__parse_coords(x), coords)
 
                 # Change from lists of points to lists of line segments
+                # i.e., pairs of consecutive points
                 for i, arr in enumerate(coords):
                     coords[i] = [np.array(arr[j:j+2,:]) for j in range(len(arr)-1)]
 
                 # Flatten the list of line segments
                 coords = np.array([item for sublist in coords for item in sublist])
-
-                # Flatten out the line segments from 2x2 to 4x1
-                coords = np.array(map(lambda x: x.flatten(), coords))
-
-                # Remove duplicates
-                # Why oh why does numpy unique not have an axis argument...
-                b = np.ascontiguousarray(coords).view(
-                        np.dtype((np.void, coords.dtype.itemsize * coords.shape[1])))
-                _, idx = np.unique(b, return_index=True)
-                l1 = len(coords)
-                coords = coords[idx]
-                if len(coords) != l1:
-                    print(name + ' ' + str(l1 - len(coords)))
-
-                coords = np.array(map(lambda x: x.reshape((2,2)), coords))
 
                 route_coords[name] = coords
 
