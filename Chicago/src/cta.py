@@ -9,7 +9,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 import os
-import pykml
+import pykml.parser
 
 class bus:
     """
@@ -188,12 +188,27 @@ class bus:
                 route_coords[name] = map(lambda x: self.__parse_coords(x), coords)
         return route_coords
 
+    def plot_route_shapes(self, routes):
+        plt.figure()
+        shapes = self.route_shapes()
+        if type(routes) is not list:
+            routes = [routes]
+        cmap = plt.get_cmap('Dark2', len(routes))
+        for idx, route in enumerate(routes):
+            r = str(route).upper()
+            if r not in shapes.keys():
+                print 'route ' + r + ' was not found in the shapefile.'
+                continue
+            for i in range(len(shapes[r])):
+                plt.plot(shapes[r][i][:,1], shapes[r][i][:,0], color=cmap(idx))
+        plt.axes().set_aspect('equal', 'datalim')
+
     @staticmethod
     def __parse_coords(coords_text):
         coords = coords_text.split(' ')[1:]
         coords = map(lambda c: c.split(',')[0:2], coords)
         coords = map(lambda xy_pair: [float(c) for c in xy_pair[::-1]], coords)
-        return coords
+        return np.array(coords)
 
     @staticmethod
     def __read_bus_data(filename):
