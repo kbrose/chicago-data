@@ -213,6 +213,14 @@ class bus:
                 # Flatten the list of line segments
                 coords = np.array([item for sublist in coords for item in sublist])
 
+                # do a dictionary sort on the coordinates
+                # facilitates removal of duplicates later.
+                for i in range(len(coords)):
+                    if coords[i][0,0] < coords[i][1,0]:
+                        continue
+                    if coords[i][0,0] > coords[i][1,0] or coords[i][0,1] > coords[i][1,1]:
+                        coords[i] = np.flipud(coords[i])
+
                 route_coords[name] = coords
 
         return route_coords
