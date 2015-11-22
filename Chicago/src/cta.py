@@ -151,21 +151,81 @@ class bus:
         shapes = self.route_shapes()
         if type(routes) is not list:
             routes = [routes]
-        cmap = plt.get_cmap('Dark2', len(routes))
         for idx, route in enumerate(routes):
             r = str(route).upper()
             if r not in shapes.keys():
                 print 'route ' + r + ' was not found in the shapefile.'
                 continue
-            for i in range(shapes[r].shape[0]):
-                plt.plot(shapes[r][i,:,1], shapes[r][i,:,0], color=cmap(idx))
+
+            alpha = self.data[r].fillna(0).mean()
+            alpha = (alpha / 28235.040843465045) ** .5
+
+            line_segs = shapes[r]
+            cond_shape = self.condense_shape(line_segs)
+            for shape in cond_shape:
+                plt.plot(shape[:,1], shape[:,0], alpha=alpha, color=(.8,.9,1), linewidth=1)
         plt.axes().set_aspect('equal', 'datalim')
+        plt.axes().set_axis_bgcolor((0,0,0))
 
     def routes(self):
         """
         Returns a list of routes as strings.
         """
         return self.data.columns.tolist()[1:] # [1:] gets rid of "daytype" col
+
+    @staticmethod
+    def condense_shape(shape):
+        '''
+        Takes in a list of line segments and condenses them by joining
+        consecutive line segments using a greedy algorithm.
+
+        Parameters
+        ----------
+        shape : Nx2x2 numpy array corresponding to line segments
+
+        Returns
+        -------
+        cond_shape : List of Mx2 arrays where line segments have been
+                     joined together if they share a coordinate.
+        '''
+        shape = shape.copy() # TODO: I don't think we need this...?
+        cond_shape = []
+        curr_path = shape[0].tolist()
+        shape = shape[1:]
+        while shape.shape[0]:
+            try:
+                share_coords = map(lambda x: all(x), shape[:,0,:] == curr_path[0]).index(True)
+                curr_path = [shape[share_coords,1].tolist()] + curr_path
+                shape = np.vstack((shape[0:share_coords], shape[share_coords+1:]))
+                continue
+            except ValueError:
+                pass
+            try:
+                share_coords = map(lambda x: all(x), shape[:,1,:] == curr_path[0]).index(True)
+                curr_path = [shape[share_coords,0].tolist()] + curr_path
+                shape = np.vstack((shape[0:share_coords], shape[share_coords+1:]))
+                continue
+            except ValueError:
+                pass
+            try:
+                share_coords = map(lambda x: all(x), shape[:,0,:] == curr_path[-1]).index(True)
+                curr_path = curr_path + [shape[share_coords,1].tolist()]
+                shape = np.vstack((shape[0:share_coords], shape[share_coords+1:]))
+                continue
+            except ValueError:
+                pass
+            try:
+                share_coords = map(lambda x: all(x), shape[:,1,:] == curr_path[-1]).index(True)
+                curr_path = curr_path + [shape[share_coords,0].tolist()]
+                shape = np.vstack((shape[0:share_coords], shape[share_coords+1:]))
+                continue
+            except ValueError:
+                pass
+            cond_shape.append(curr_path)
+            curr_path = shape[0].tolist()
+            shape = shape[1:]
+
+        return map(lambda x: np.array(x), cond_shape)
 
     def route_shapes(self, filename=None):
         '''
@@ -220,6 +280,8 @@ class bus:
                         continue
                     if coords[i][0,0] > coords[i][1,0] or coords[i][0,1] > coords[i][1,1]:
                         coords[i] = np.flipud(coords[i])
+
+
 
                 route_coords[name] = coords
 
