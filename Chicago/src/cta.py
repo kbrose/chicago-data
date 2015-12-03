@@ -52,6 +52,14 @@ class bus:
         Returns
         -------
         ax : axes object the object was plotted on
+
+        Notes
+        -----
+        Matplotlib stacked area charts do not play well with NaN values.
+        If one of the specified routes is NaN at a given coordinate, then
+        all routes listed *after* that route in the function call will not
+        be plotted. Thus, if you have set stacked=True then it is
+        recommended that you also set fillzero=True.
         """
         # create new figure if no axis provided
         if ax is None:
@@ -79,7 +87,7 @@ class bus:
                 print('Invalid route ' + route + ', check *.rotues() for complete list')
                 del(routes[routes.index(route)])
 
-        if not routes:
+        if not routes: # no routes to plot
             return ax
 
         # do this awful mess to deal with stacked plot legends not showing up
@@ -146,28 +154,66 @@ class bus:
 
         return ax
 
-    def plot_route_shapes(self, routes):
-        #plt.figure()
+    def plot_route_shapes(self, routes=None, transparency=True):
+        '''
+        Plots the shapes of the specified routes using lat/long
+        pairs. The routes can have their transparency set based
+        on how many people have ridden the bus since the data
+        starts in 2001.
+
+        Parameters
+        ----------
+        routes       : List of routes to plot. The default is to plot
+                       all possible routes. Note that some routes are
+                       in the daily ridership data but NOT in the
+                       route shape data. This can happen because the
+                       route is older than the shape data, or because
+                       it is too small.
+        transparency : Boolean. Set to True if you want the routes
+                       to have variable transparency as described
+                       above. Set to False to make all routes opaque.
+
+        Returns
+        -------
+        ax : matplotlib axes object containing the plot.
+
+        Notes
+        -----
+        The axis is set to have a square aspect ratio in order to
+        preserve the shape of the routes. Use ax.set_aspect('auto')
+        to set it back to the default value.
+        '''
+        plt.figure()
+        ax = plt.gca()
+
         shapes = self.route_shapes()
-        max_ridership = self.data.fillna(0).mean().max()
+
+        if routes is None:
+            routes = self.routes()
+
         if type(routes) is not list:
             routes = [routes]
-        plt.figure()
+
         for idx, route in enumerate(routes):
             r = str(route).upper()
             if r not in shapes.keys():
                 print 'route ' + r + ' was not found in the shapefile.'
                 continue
 
-            alpha = self.data[r].fillna(0).mean()
-            alpha = (alpha / max_ridership) ** .5
+            if transparency:
+                alpha = self.data[r].fillna(0).mean()
+                alpha = alpha / 28235.040843465045
+            else:
+                alpha = 1
 
             line_segs = shapes[r]
             cond_shape = self.condense_shape(line_segs)
             for shape in cond_shape:
-                plt.plot(shape[:,1], shape[:,0], alpha=alpha, color=(.8,.9,1), linewidth=1)
-        plt.axes().set_aspect('equal', 'datalim')
-        plt.axes().set_axis_bgcolor((0,0,0))
+                ax.plot(shape[:,1], shape[:,0], alpha=alpha, color=(.8,.9,1), linewidth=1)
+
+        ax.set_aspect('equal', 'datalim')
+        ax.set_axis_bgcolor((0,0,0))
+        return ax
 
     def routes(self):
         """
@@ -183,12 +229,19 @@ class bus:
 
         Parameters
         ----------
-        shape : Nx2x2 numpy array corresponding to line segments
+        shape : Nx2x2 numpy array corresponding to line segments. For example,
+                one of the values in the dictionary returned by route_shapes.
 
         Returns
         -------
         cond_shape : List of Mx2 arrays where line segments have been
                      joined together if they share a coordinate.
+
+        Notes
+        -----
+        This method employs a simple greedy algorithm to build up the lists.
+        There is no guarantee that the number of elements in the returned
+        list is optimally low.
         '''
         shape = shape.copy() # TODO: I don't think we need this...?
         cond_shape = []
@@ -243,12 +296,13 @@ class bus:
         Returns
         -------
         route_coords : A dictionary of shapes for bus routes. The keys
-                       the bus route names and the values are lists of
-                       lists of (lat,lon) pairs. A bus route can have
-                       multiple lists of (lat,lon) pairs since there
-                       can be different sub-routes (i.e. going in
-                       different directions, only going part of the
-                       full route, etc.)
+                       are the bus route names and the values are Nx2x2
+                       numpy arrays. If X is one of these arrays, then
+                       X[i] describes a line segment such that X[i,0,:]
+                       and X[i,1,:] are the two ends of the line segment.
+                       The line segments are "dictionary sorted", i.e.
+                       sorted along their first coordinate and then their
+                       second coordinate.
         '''
         if filename is None:
             filename = os.path.join(os.path.dirname(__file__),
@@ -283,8 +337,6 @@ class bus:
                     if coords[i][0,0] > coords[i][1,0] or coords[i][0,1] > coords[i][1,1]:
                         coords[i] = np.flipud(coords[i])
 
-
-
                 route_coords[name] = coords
 
         return route_coords
@@ -305,6 +357,9 @@ class bus:
         data.insert(0,0,daytypes)
         data.rename(columns={0:'daytype'}, inplace=True)
         return data
+
+    def __str__(self):
+        return 'cta bus daily ridership data for routes [' + ', '.join(self.routes()) + '].'
 
 
 class train:
@@ -590,4 +645,3 @@ class train:
                     inplace=True)
 
         return data
-
