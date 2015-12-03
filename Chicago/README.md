@@ -15,7 +15,7 @@ It is my hope that the documentation in the main code file (`./src/cta.py`) will
 ### Loading the data
 The data is loaded into memory as a pandas dataframe. The columns describe the bus routes/train stops and the rows describe the date. A `NaN` value is used to indicate that the bus/train stop was not active on the given day.
 
-```
+```python
 import cta
 
 bus = cta.bus()
@@ -31,7 +31,7 @@ d2 = train.data
 ### Yearly Ridership
 You can easily see what the yearly trends of the ridership for buses, trains, and buses and trains combined:
 
-```
+```python
 bus.data.sum(axis=1).resample('AS').plot()
 plt.hold(True)
 train.data.sum(axis=1).resample('AS').plot()
@@ -59,7 +59,7 @@ bus.plot_route_shapes(bus.routes())
 ### Daily Ridership for a few routes
 Daily ridership for different routes can be plotted easily as well:
 
-```
+```python
 # notice the flexible type and case-sensitivity for the route indicator
 bus.plot_routes([2, '6', 28, 'x28', 'J14'],fillzero=True)
 ```
@@ -71,7 +71,7 @@ We can zoom in on just a couple months:
 ### The Fast Fourier Transform
 The Fast Fourier Transform ([FFT](https://en.wikipedia.org/wiki/Fast_Fourier_transform)) can be plotted for individual routes in a similar fashion:
 
-```
+```python
 bus.plot_fft(48)
 ```
 
