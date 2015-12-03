@@ -147,10 +147,12 @@ class bus:
         return ax
 
     def plot_route_shapes(self, routes):
-        plt.figure()
+        #plt.figure()
         shapes = self.route_shapes()
+        max_ridership = self.data.fillna(0).mean().max()
         if type(routes) is not list:
             routes = [routes]
+        plt.figure()
         for idx, route in enumerate(routes):
             r = str(route).upper()
             if r not in shapes.keys():
@@ -158,7 +160,7 @@ class bus:
                 continue
 
             alpha = self.data[r].fillna(0).mean()
-            alpha = (alpha / 28235.040843465045) ** .5
+            alpha = (alpha / max_ridership) ** .5
 
             line_segs = shapes[r]
             cond_shape = self.condense_shape(line_segs)
