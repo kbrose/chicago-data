@@ -49,7 +49,7 @@ The output should look something like
 ### Geographic Routes
 You can plot the routes in geographic coordinates (latitude/longitude (x,y) pairs), and additionally make the routes more opaque/more transparent based on average ridership:
 
-```
+```python
 # bus.routes() returns a list of all routes
 bus.plot_route_shapes(bus.routes())
 ```
