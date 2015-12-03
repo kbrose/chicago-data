@@ -2,11 +2,15 @@
 
 The Chicago Transit Authority (CTA) is, as the name implies, the public transportation organization for the city of Chicago. From 2001 through May 2015, the CTA has averaged 825,586 bus rides per day and 458,871 train rides per day. This project attempts to supply you with tools for investigating the data that has been published.
 
+Most of the focus thus far has been on tools for investigating bus ridership. The train ridership is a more complex beast; we get train ridership by the *station*, not by the train. If a station serves more than one train, then we cannot know for certain how many people used each of the different lines at the station. This makes any analysis much more complex.
+
 ## Installation
 
 Download or clone this repository. You will need several python libraries: pandas, numpy, matplotlib, and pykml (if you think I am missing a dependency please let me know!).
 
 ## Examples
+
+It is my hope that the documentation in the main code file (`./src/cta.py`) will be good enough so that you can start to use the library right away. The few examples here are more to showcase what kinds of investigation this project attempts to facilitate.
 
 ### Loading the data
 The data is loaded into memory as a pandas dataframe. The columns describe the bus routes/train stops and the rows describe the date. A `NaN` value is used to indicate that the bus/train stop was not active on the given day.
@@ -60,16 +64,18 @@ Daily ridership for different routes can be plotted easily as well:
 bus.plot_routes([2, '6', 28, 'x28', 'J14'],fillzero=True)
 ```
 
-And after some zooming, it should look like
+We can zoom in on just a couple months:
 
 ![](https://raw.githubusercontent.com/kbrose/dataViz/master/Chicago/imgs/nov_dec_ridership.png)
 
 ### The Fast Fourier Transform
-The Fast Fourier Transform (FFT) can be plotted for individual routes in a similar fashion:
+The Fast Fourier Transform ([FFT](https://en.wikipedia.org/wiki/Fast_Fourier_transform)) can be plotted for individual routes in a similar fashion:
 
 ```
 bus.plot_fft(48)
 ```
+
+which results in
 
 ![](https://raw.githubusercontent.com/kbrose/dataViz/master/Chicago/imgs/fft.png)
 
