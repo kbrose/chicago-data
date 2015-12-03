@@ -10,7 +10,6 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import os
 import pykml.parser
-import dateparsing
 
 class bus:
     """
@@ -194,6 +193,8 @@ class bus:
         if type(routes) is not list:
             routes = [routes]
 
+        max_ridership = self.data.fillna(0).mean().max()
+
         for idx, route in enumerate(routes):
             r = str(route).upper()
             if r not in shapes.keys():
@@ -202,7 +203,7 @@ class bus:
 
             if transparency:
                 alpha = self.data[r].fillna(0).mean()
-                alpha = alpha / 28235.040843465045
+                alpha = alpha / max_ridership
             else:
                 alpha = 1
 
@@ -351,7 +352,7 @@ class bus:
     @staticmethod
     def __read_bus_data(filename):
         data = pd.read_csv(filename)
-        data['date'] = dateparsing.lookup(data['date'])
+        data['date'] = utils.lookup(data['date'])
         daytypes = data.drop_duplicates(subset='date')['daytype']
         data = data.pivot(index='date', columns='route', values='rides')
         data.insert(0,0,daytypes)
@@ -612,7 +613,7 @@ class train:
     @staticmethod
     def __read_train_data(filename):
         data = pd.read_csv(filename)
-        data['date'] = dateparsing.lookup(data['date'])
+        data['date'] = utils.lookup(data['date'])
 
         # Combine the ID and station-name fields into one column
         ids = data['station_id'].map(lambda x: str(x))
@@ -645,3 +646,22 @@ class train:
                     inplace=True)
 
         return data
+
+class utils:
+    """
+    Class containing all utility functions used by transit classes.
+    """
+
+    @staticmethod
+    def lookup(s):
+        """
+        This is an extremely fast approach to datetime parsing.
+        For large data, the same dates are often repeated. Rather than
+        re-parse these, we store all unique dates, parse them, and
+        use a lookup to convert all dates.
+
+        Thanks to fixxxer, found at
+        http://stackoverflow.com/questions/29882573
+        """
+        dates = {date:pd.to_datetime(date) for date in s.unique()}
+        return s.apply(lambda v: dates[v])
