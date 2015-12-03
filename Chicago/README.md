@@ -40,7 +40,7 @@ plt.ylim([0, plt.ylim()[1]])
 
 The output should look something like
 
-![](https://github.com/kbrose/dataViz/tree/master/Chicago/imgs/yearly_ridership.png)
+![](https://raw.githubusercontent.com/kbrose/dataViz/tree/master/Chicago/imgs/yearly_ridership.png)
 
 ### Geographic Routes
 You can plot the routes in geographic coordinates (latitude/longitude (x,y) pairs), and additionally make the routes more opaque/more transparent based on average ridership:
@@ -50,7 +50,7 @@ You can plot the routes in geographic coordinates (latitude/longitude (x,y) pair
 bus.plot_route_shapes(bus.routes())
 ```
 
-![](https://github.com/kbrose/dataViz/tree/master/Chicago/imgs/routes.png)
+![](https://raw.githubusercontent.com/kbrose/dataViz/tree/master/Chicago/imgs/routes.png)
 
 ### Daily Ridership for a few routes
 Daily ridership for different routes can be plotted easily as well:
@@ -62,7 +62,7 @@ bus.plot_routes([2, '6', 28, 'x28', 'J14'],fillzero=True)
 
 And after some zooming, it should look like
 
-![](https://github.com/kbrose/dataViz/tree/master/Chicago/imgs/nov_dec_ridership.png)
+![](https://raw.githubusercontent.com/kbrose/dataViz/tree/master/Chicago/imgs/nov_dec_ridership.png)
 
 ### The Fast Fourier Transform
 The Fast Fourier Transform (FFT) can be plotted for individual routes in a similar fashion:
@@ -71,7 +71,7 @@ The Fast Fourier Transform (FFT) can be plotted for individual routes in a simil
 bus.plot_fft(48)
 ```
 
-![](https://github.com/kbrose/dataViz/tree/master/Chicago/imgs/fft.png)
+![](https://raw.githubusercontent.com/kbrose/dataViz/tree/master/Chicago/imgs/fft.png)
 
 (Note that 1/7 = 0.14285..., 2/7 = 0.2857..., and 3/7 = 0.4285...)
 
