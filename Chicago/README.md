@@ -79,7 +79,9 @@ which results in
 
 ![](https://raw.githubusercontent.com/kbrose/dataViz/master/Chicago/imgs/fft.png)
 
-(Note that 1/7 = 0.14285..., 2/7 = 0.2857..., and 3/7 = 0.4285...)
+(Note that 1/7 = 0.14285..., 2/7 = 0.2857..., and 3/7 = 0.4285....)
+
+The FFT is normalized so that it sums to 1. The hope is that this allows for meaningful comparison between the FFT of different routes, so that a route with higher overall variance would not dominate over a route with smaller variance.
 
 ## Data Source(s)
 
