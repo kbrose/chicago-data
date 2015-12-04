@@ -131,8 +131,7 @@ class bus:
             routes = [routes]
 
         # fill missing with 0 as necessary
-        data = self.data.copy()
-        data.fillna(value=0, inplace=True)
+        data = self.data.fillna(value=0, inplace=False)
 
         # Convert routes to strings if they are not already
         routes = map(lambda x: str(x).upper(), routes)
@@ -198,7 +197,7 @@ class bus:
         for idx, route in enumerate(routes):
             r = str(route).upper()
             if r not in shapes.keys():
-                print 'route ' + r + ' was not found in the shapefile.'
+                print('route ' + r + ' was not found in the shapefile.')
                 continue
 
             if transparency:
@@ -244,7 +243,6 @@ class bus:
         There is no guarantee that the number of elements in the returned
         list is optimally low.
         '''
-        shape = shape.copy() # TODO: I don't think we need this...?
         cond_shape = []
         curr_path = shape[0].tolist()
         shape = shape[1:]
