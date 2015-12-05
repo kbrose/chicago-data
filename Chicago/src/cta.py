@@ -350,8 +350,9 @@ class bus:
     @staticmethod
     def __read_bus_data(filename):
         data = pd.read_csv(filename)
-        data['date'] = utils.lookup(data['date'])
-        daytypes = data.drop_duplicates(subset='date')['daytype']
+        data['date'] = utils.date_lookup(data['date'])
+        daytypes = data.drop_duplicates(subset='date')[['date', 'daytype']]
+        daytypes = daytypes.set_index('date')
         data = data.pivot(index='date', columns='route', values='rides')
         data.insert(0,0,daytypes)
         data.rename(columns={0:'daytype'}, inplace=True)
