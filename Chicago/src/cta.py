@@ -13,12 +13,108 @@ import pykml.parser
 
 class bus:
     """
+    CTA Bus Class
+    =============
     Class with functions and data related to Chicago Transit Authority (CTA)
     data pertaining to bus rides broken down by day and route.
+
+    How to use the documentation
+    ----------------------------
+    This documentation assumes you have imported and loaded up the
+    objects by calling
+
+    >>> import cta
+    >>> bus = cta.bus()
+
+    The Data
+    ---------
+    This class provides the data as a pandas dataframe. It is accessed by
+
+    >>> bus.data
+
+    With the exception of "daytype", the columns are the names of routes.
+    The daytype column is a classification of the date into
+        'W' : normal weekday (not holiday)
+        'A' : Saturday
+        'U' : Sunday or holiday
+    It appears as if a holiday is considered as one of New Year's Day,
+    Memorial Day, Independence Day, Labor Day, Thanksgiving, and Christmas Day
+
+    The rest of the columns are the number of riders on the corresponding
+    day and route. A value of NaN indicates that the bus was not running.
+    Route 1001 is reserved for "shuttle buses used for construction or other
+    unforeseen events".
+
+    The data was downloaded as a CSV from
+    https://data.cityofchicago.org/Transportation/CTA-Ridership-Bus-Routes-Daily-Totals-by-Route/jyb9-n7fm
+
+    Of note, the data-viewer available at the supplied link seems to indicate
+    that no routes have 0 ridership for any day (although quite a few have
+    just 1 rider reported), but the CSV indicates otherwise.
+
+    There are 9 routes in total that have 0 ridership reported for any day:
+
+    >>> iszero = bus.data == 0
+    >>> for c in iszero.columns:
+    >>>     if any(iszero[c]):
+    >>>     print(c)
+    1001
+    106
+    168
+    169
+    290
+    290S
+    X3
+    X4
+    X98
+
+    There is also a README associated with the data-set. This can be found at
+    https://data.cityofchicago.org/api/assets/DBD13076-48DD-4AF8-AD91-4130456E96E9?
+
+    Methods
+    -------
+    plot_routes
+        Plots ridership values for specified routes as a time series
+    plot_fft
+        Plots the Fast Fourier Transform for specified routes
+    plot_route_shapes
+        Plots the geographic shape of the specified routes
+    routes
+        Returns a list of all routes
+    route_shapes
+        Returns a dict of Nx2x2 arrays of line segments describing
+        the shape of each route as (lat, long) pairs.
+    condense_shape
+        Returns a condensed version of an Nx2x2 array in the format
+        of the values returned by route_shapes. The condensed version
+        is a list of Nx2 arrays describing a path as (lat, long) pairs.
+
+    Examples
+    --------
+    Plot some riderhip values.
+
+    >>> bus.plot_routes([9, 'j14', 2, '15'])
+    >>> bus.plot_routes([9, 'j14', 2, '15'], resamp='W')
+    >>> bus.plot_routes([9, 'j14', 2, '15'], resamp='W',
+    ...                 fillzero=True)
+    >>> bus.plot_routes([9, 'j14', 2, '15'], resamp='W',
+    ...                 fillzero=True, stacked=True)
+
+    Plot the FFT for some buses.
+
+    >>> bus.plot_fft([48, 49, 50])
+
+    Plot the shapes of the routes. The lines are made more transparent
+    inversely proportional to mean daily ridership.
+
+    >>> bus.plot_route_shapes(bus.routes())
     """
 
     def __init__(self, filename=None):
         """
+        __init__
+        ========
+
         Loads the data from the CSV file. If filename is not given then
         ../data/bus_route_daily_totals.csv is used.
         """
@@ -29,7 +125,7 @@ class bus:
 
     def plot_routes(self, routes, resamp=None, fillzero=False, stacked=False, ax=None):
         """
-        Plots all specified routes on the same axis.
+        Plots ridership for all specified routes on the same axis.
 
         Parameters
         ----------
@@ -246,38 +342,48 @@ class bus:
         cond_shape = []
         curr_path = shape[0].tolist()
         shape = shape[1:]
+
+        # Simple function to test whether the shape and the path
+        # share a coordinate at the specified indices
+        def shares_coord(shp, pth, shp_idx, pth_idx):
+            share_coords = map(lambda x: all(x),
+                               shp[:,shp_idx,:] == pth[pth_idx])
+            try:
+                return share_coords.index(True)
+            except ValueError:
+                return None
+
         while shape.shape[0]:
-            try:
-                share_coords = map(lambda x: all(x), shape[:,0,:] == curr_path[0]).index(True)
-                curr_path = [shape[share_coords,1].tolist()] + curr_path
-                shape = np.vstack((shape[0:share_coords], shape[share_coords+1:]))
-                continue
-            except ValueError:
-                pass
-            try:
-                share_coords = map(lambda x: all(x), shape[:,1,:] == curr_path[0]).index(True)
-                curr_path = [shape[share_coords,0].tolist()] + curr_path
-                shape = np.vstack((shape[0:share_coords], shape[share_coords+1:]))
-                continue
-            except ValueError:
-                pass
-            try:
-                share_coords = map(lambda x: all(x), shape[:,0,:] == curr_path[-1]).index(True)
-                curr_path = curr_path + [shape[share_coords,1].tolist()]
-                shape = np.vstack((shape[0:share_coords], shape[share_coords+1:]))
-                continue
-            except ValueError:
-                pass
-            try:
-                share_coords = map(lambda x: all(x), shape[:,1,:] == curr_path[-1]).index(True)
-                curr_path = curr_path + [shape[share_coords,0].tolist()]
-                shape = np.vstack((shape[0:share_coords], shape[share_coords+1:]))
-                continue
-            except ValueError:
-                pass
-            cond_shape.append(curr_path)
-            curr_path = shape[0].tolist()
-            shape = shape[1:]
+            did_extend_shape = False
+            for shape_index, path_index in zip([0,0,1,1],[0,-1,0,-1]):
+                shared = shares_coord(shape, curr_path, shape_index, path_index)
+                if shared is None:
+                    continue
+
+                # shape and curr_path have the same coordinate at
+                # shape[shared,shape_index,:] and curr_path[path_index]
+                # We need to append the other end of the line segment
+                # in shape[shared,:,:], which is indexed by
+                # shape[shared, not shape_index, :]
+                shape_index = not shape_index
+
+                if path_index == 0: # need to prepend new coordinate
+                    curr_path = [shape[shared,shape_index].tolist()] + curr_path
+                else: # need to append new coordinate
+                    curr_path = curr_path + [shape[shared,shape_index].tolist()]
+
+                # remove coordinate from shape
+                shape = np.vstack((shape[0:shared], shape[shared+1:]))
+
+                did_extend_shape = True
+                break
+
+            if not did_extend_shape:
+                # we were not able to extend the current path
+                # store the path and start a new one.
+                cond_shape.append(curr_path)
+                curr_path = shape[0].tolist()
+                shape = shape[1:]
 
         return map(lambda x: np.array(x), cond_shape)
 
@@ -359,7 +465,8 @@ class bus:
         return data
 
     def __str__(self):
-        return 'cta bus daily ridership data for routes [' + ', '.join(self.routes()) + '].'
+        route_strs = ', '.join(self.routes())
+        return 'cta bus daily ridership data for routes [' + route_strs + '].'
 
 
 class train:
@@ -397,6 +504,7 @@ class train:
                    See parse_stop for more information
         resamp   : String representing how to downsample for plotting. Use 'W' for
                    weekly, 'M' for monthly, 'Q' for quarterly, or 'AS' for yearly.
+                   See the link below for more options.
                    http://pandas.pydata.org/pandas-docs/stable/timeseries.html#offset-aliases
                    DEFAULT: resamp = None # no resampling
         fillzero : Set to True to fill in missing ridership data with 0. Data is
@@ -612,7 +720,7 @@ class train:
     @staticmethod
     def __read_train_data(filename):
         data = pd.read_csv(filename)
-        data['date'] = utils.lookup(data['date'])
+        data['date'] = utils.date_lookup(data['date'])
 
         # Combine the ID and station-name fields into one column
         ids = data['station_id'].map(lambda x: str(x))
@@ -622,7 +730,8 @@ class train:
         data['station_id_name'] = id_names
 
         # Save the daytypes
-        daytypes = data.drop_duplicates(subset='date')['daytype']
+        daytypes = data.drop_duplicates(subset='date')[['date', 'daytype']]
+        daytypes = daytypes.set_index('date')
 
         # Pivot, insert the daytypes back in
         data = data.pivot_table(index='date', columns='station_id_name', values='rides')
@@ -652,7 +761,7 @@ class utils:
     """
 
     @staticmethod
-    def lookup(s):
+    def date_lookup(s):
         """
         This is an extremely fast approach to datetime parsing.
         For large data, the same dates are often repeated. Rather than
