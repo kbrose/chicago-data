@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import os
 import pykml.parser
+import json
 
 class bus:
     """
@@ -18,7 +19,7 @@ class bus:
     Class with functions and data related to Chicago Transit Authority (CTA)
     data pertaining to bus rides broken down by day and route.
 
-    How to use the documentation
+    Do this first
     ----------------------------
     This documentation assumes you have imported and loaded up the
     objects by calling
@@ -73,31 +74,31 @@ class bus:
 
     Methods
     -------
-    plot_routes
+    plot_rides
         Plots ridership values for specified routes as a time series
     plot_fft
         Plots the Fast Fourier Transform for specified routes
-    plot_route_shapes
+    plot_shapes
         Plots the geographic shape of the specified routes
     routes
         Returns a list of all routes
-    route_shapes
+    shapes
         Returns a dict of Nx2x2 arrays of line segments describing
         the shape of each route as (lat, long) pairs.
     condense_shape
         Returns a condensed version of an Nx2x2 array in the format
-        of the values returned by route_shapes. The condensed version
+        of the values returned by shapes. The condensed version
         is a list of Nx2 arrays describing a path as (lat, long) pairs.
 
     Examples
     --------
     Plot some riderhip values.
 
-    >>> bus.plot_routes([9, 'j14', 2, '15'])
-    >>> bus.plot_routes([9, 'j14', 2, '15'], resamp='W')
-    >>> bus.plot_routes([9, 'j14', 2, '15'], resamp='W',
+    >>> bus.plot_rides([9, 'j14', 2, '15'])
+    >>> bus.plot_rides([9, 'j14', 2, '15'], resamp='W')
+    >>> bus.plot_rides([9, 'j14', 2, '15'], resamp='W',
     ...                 fillzero=True)
-    >>> bus.plot_routes([9, 'j14', 2, '15'], resamp='W',
+    >>> bus.plot_rides([9, 'j14', 2, '15'], resamp='W',
     ...                 fillzero=True, stacked=True)
 
     Plot the FFT for some buses.
@@ -107,7 +108,7 @@ class bus:
     Plot the shapes of the routes. The lines are made more transparent
     inversely proportional to mean daily ridership.
 
-    >>> bus.plot_route_shapes(bus.routes())
+    >>> bus.plot_shapes(bus.routes())
     """
 
     def __init__(self, filename=None):
@@ -123,7 +124,7 @@ class bus:
                                     '../data/bus_route_daily_totals.csv')
         self.data = self.__read_bus_data(filename)
 
-    def plot_routes(self, routes, resamp=None, fillzero=False, stacked=False, ax=None):
+    def plot_rides(self, routes, resamp=None, fillzero=False, stacked=False, ax=None):
         """
         Plots ridership for all specified routes on the same axis.
 
@@ -179,7 +180,7 @@ class bus:
         for i in xrange(len(routes)):
             route = routes[i]
             if route not in data.columns:
-                print('Invalid route ' + route + ', check *.rotues() for complete list')
+                print('Invalid route ' + route + ', check bus.routes() for complete list')
                 del(routes[routes.index(route)])
 
         if not routes: # no routes to plot
@@ -248,7 +249,7 @@ class bus:
 
         return ax
 
-    def plot_route_shapes(self, routes=None, transparency=True):
+    def plot_shapes(self, routes=None, transparency=True):
         '''
         Plots the shapes of the specified routes using lat/long
         pairs. The routes can have their transparency set based
@@ -280,7 +281,7 @@ class bus:
         plt.figure()
         ax = plt.gca()
 
-        shapes = self.route_shapes()
+        shapes = self.shapes()
 
         if routes is None:
             routes = self.routes()
@@ -326,7 +327,7 @@ class bus:
         Parameters
         ----------
         shape : Nx2x2 numpy array corresponding to line segments. For example,
-                one of the values in the dictionary returned by route_shapes.
+                one of the values in the dictionary returned by shapes.
 
         Returns
         -------
@@ -387,7 +388,7 @@ class bus:
 
         return map(lambda x: np.array(x), cond_shape)
 
-    def route_shapes(self, filename=None):
+    def shapes(self, filename=None):
         '''
         Returns a set of shapes (i.e. list of (lat,lon) coordinate pairs)
         describing the bus routes. The expected input is a KML file with a
@@ -411,40 +412,116 @@ class bus:
         '''
         if filename is None:
             filename = os.path.join(os.path.dirname(__file__),
-                                    '../data/CTABusRoutes.kml')
+                                    '../data/CTABusRoutes.json')
 
-        with open(filename, 'r') as f:
-            root = pykml.parser.fromstring(f.read())
+        try:
+            with open(filename, 'r') as f:
+                shapes = json.load(f)
+                for key in shapes.keys():
+                    shapes[key] = np.array(shapes[key])
+                return shapes
 
-        route_coords = {}
-        for route in root.Document.Folder.iterchildren():
-            if 'Placemark' in route.tag:
-                name = str(route.name)
-                line_strings = route.MultiGeometry.getchildren()
-                coords = [l.coordinates.text for l in line_strings]
+        except IOError:
+            filename = filename[:-4] + 'kml'
+            with open(filename, 'r') as f:
+                root = pykml.parser.fromstring(f.read())
 
-                # Convert string to numpy array
-                coords = map(lambda x: self.__parse_coords(x), coords)
+            route_coords = {}
+            for route in root.Document.Folder.iterchildren():
+                if 'Placemark' in route.tag:
+                    name = str(route.name)
+                    line_strings = route.MultiGeometry.getchildren()
+                    coords = [l.coordinates.text for l in line_strings]
 
-                # Change from lists of points to lists of line segments
-                # i.e., pairs of consecutive points
-                for i, arr in enumerate(coords):
-                    coords[i] = [np.array(arr[j:j+2,:]) for j in range(len(arr)-1)]
+                    # Convert string to numpy array
+                    coords = map(lambda x: self.__parse_coords(x), coords)
 
-                # Flatten the list of line segments
-                coords = np.array([item for sublist in coords for item in sublist])
+                    # Change from lists of points to lists of line segments
+                    # i.e., pairs of consecutive points
+                    for i, arr in enumerate(coords):
+                        coords[i] = [np.array(arr[j:j+2,:]) for j in range(len(arr)-1)]
 
-                # do a dictionary sort on the coordinates
-                # facilitates removal of duplicates later.
-                for i in range(len(coords)):
-                    if coords[i][0,0] < coords[i][1,0]:
+                    # Flatten the list of line segments
+                    coords = np.array([item for sublist in coords for item in sublist])
+
+                    # do a dictionary sort on the coordinates
+                    # facilitates removal of duplicates later.
+                    for i in range(len(coords)):
+                        if coords[i][0,0] < coords[i][1,0]:
+                            continue
+                        if coords[i][0,0] > coords[i][1,0] or coords[i][0,1] > coords[i][1,1]:
+                            coords[i] = np.flipud(coords[i])
+
+                    route_coords[name] = coords
+
+            return route_coords
+
+
+    def stops(self, filename=None):
+        '''
+        Returns a set of shapes (i.e. list of (lat,lon) coordinate pairs)
+        describing the bus routes. The expected input is a KML file with a
+        similar structure as ../data/CTABusRoutes.kml
+
+        Parameters
+        ----------
+        filename : path to the .kml file that should be parsed.
+                   DEFAULT: ../data/CTABusRoutes.kml
+
+        Returns
+        -------
+        route_coords : A dictionary of shapes for bus routes. The keys
+                       are the bus route names and the values are Nx2x2
+                       numpy arrays. If X is one of these arrays, then
+                       X[i] describes a line segment such that X[i,0,:]
+                       and X[i,1,:] are the two ends of the line segment.
+                       The line segments are "dictionary sorted", i.e.
+                       sorted along their first coordinate and then their
+                       second coordinate.
+        '''
+        if filename is None:
+            filename = os.path.join(os.path.dirname(__file__),
+                                    '../data/CTABusStops.json')
+
+        try:
+
+            with open(filename, 'r') as f:
+                return json.load(f)
+        except IOError:
+            filename = filename[:-4] + 'kml'
+
+            with open(filename, 'r') as f:
+                root = pykml.parser.fromstring(f.read())
+
+            route_stops = {}
+            for stop in root.Document.Folder.iterchildren():
+                if 'Placemark' in stop.tag:
+                    descrip = stop.description.text
+                    if not 'ROUTES' in descrip:
+                        print('Missing ROUTES in "' + descrip + '"')
                         continue
-                    if coords[i][0,0] > coords[i][1,0] or coords[i][0,1] > coords[i][1,1]:
-                        coords[i] = np.flipud(coords[i])
+                    descrip = descrip[descrip.index('ROUTES')+6:]
+                    descrip = descrip[:descrip.index('</tr>')]
 
-                route_coords[name] = coords
+                    routes = []
+                    curr_num = ''
+                    for c in descrip:
+                        if c.isdigit() or c.isupper():
+                            curr_num = curr_num + c
+                        else:
+                            if len(curr_num):
+                                routes.append(curr_num)
+                                curr_num = ''
 
-        return route_coords
+                    coords = self.__parse_coords(stop.Point.coordinates.text)
+
+                    for route in routes:
+                        if route in route_stops.keys():
+                            route_stops[route].append(coords)
+                        else:
+                            route_stops[route] = [coords]
+            return route_stops
+
 
     @staticmethod
     def __parse_coords(coords_text):
@@ -473,6 +550,9 @@ class train:
     """
     Class with functions and data related to Chicago Transit Authority (CTA)
     data pertaining to train rides broken down by day and station.
+
+    Warning! This class has not been looked at in quite a while. The
+    focus has been on the bus class.
     """
 
     def __init__(self, rides_filename=None, station_filename=None):
