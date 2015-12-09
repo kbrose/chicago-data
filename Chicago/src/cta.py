@@ -85,6 +85,9 @@ class bus:
     shapes
         Returns a dict of Nx2x2 arrays of line segments describing
         the shape of each route as (lat, long) pairs.
+    stops
+        Returns a dict of lists of (lat, long) pairs describing
+        the location of the bus stops
     condense_shape
         Returns a condensed version of an Nx2x2 array in the format
         of the values returned by shapes. The condensed version
@@ -412,56 +415,48 @@ class bus:
         '''
         if filename is None:
             filename = os.path.join(os.path.dirname(__file__),
-                                    '../data/CTABusRoutes.json')
+                                    '../data/CTABusRoutes.kml')
 
-        try:
-            with open(filename, 'r') as f:
-                shapes = json.load(f)
-                for key in shapes.keys():
-                    shapes[key] = np.array(shapes[key])
-                return shapes
+        with open(filename, 'r') as f:
+            root = pykml.parser.fromstring(f.read())
 
-        except IOError:
-            filename = filename[:-4] + 'kml'
-            with open(filename, 'r') as f:
-                root = pykml.parser.fromstring(f.read())
+        route_coords = {}
+        for route in root.Document.Folder.iterchildren():
+            if 'Placemark' in route.tag:
+                name = str(route.name)
+                line_strings = route.MultiGeometry.getchildren()
+                coords = [l.coordinates.text for l in line_strings]
 
-            route_coords = {}
-            for route in root.Document.Folder.iterchildren():
-                if 'Placemark' in route.tag:
-                    name = str(route.name)
-                    line_strings = route.MultiGeometry.getchildren()
-                    coords = [l.coordinates.text for l in line_strings]
+                # Convert string to numpy array
+                coords = map(lambda x: self.__parse_coords(x), coords)
 
-                    # Convert string to numpy array
-                    coords = map(lambda x: self.__parse_coords(x), coords)
+                # Change from lists of points to lists of line segments
+                # i.e., pairs of consecutive points
+                for i, arr in enumerate(coords):
+                    coords[i] = [np.array(arr[j:j+2,:]) for j in range(len(arr)-1)]
 
-                    # Change from lists of points to lists of line segments
-                    # i.e., pairs of consecutive points
-                    for i, arr in enumerate(coords):
-                        coords[i] = [np.array(arr[j:j+2,:]) for j in range(len(arr)-1)]
+                # Flatten the list of line segments
+                coords = np.array([item for sublist in coords for item in sublist])
 
-                    # Flatten the list of line segments
-                    coords = np.array([item for sublist in coords for item in sublist])
+                # do a dictionary sort on the coordinates
+                # facilitates removal of duplicates later.
+                for i in range(len(coords)):
+                    if coords[i][0,0] < coords[i][1,0]:
+                        continue
+                    if coords[i][0,0] > coords[i][1,0] or coords[i][0,1] > coords[i][1,1]:
+                        coords[i] = np.flipud(coords[i])
 
-                    # do a dictionary sort on the coordinates
-                    # facilitates removal of duplicates later.
-                    for i in range(len(coords)):
-                        if coords[i][0,0] < coords[i][1,0]:
-                            continue
-                        if coords[i][0,0] > coords[i][1,0] or coords[i][0,1] > coords[i][1,1]:
-                            coords[i] = np.flipud(coords[i])
+                route_coords[name] = coords
 
-                    route_coords[name] = coords
-
-            return route_coords
+        return route_coords
 
 
     def stops(self, filename=None):
         '''
         Returns a set of shapes (i.e. list of (lat,lon) coordinate pairs)
-        describing the bus routes. The expected input is a KML file with a
-        similar structure as ../data/CTABusRoutes.kml
+        describing bus stop locations. The expected input is a JSON file
+        with a similar structure as ../data/CTABusStops.json. A KML file
+        can also work.
 
         Parameters
         ----------
@@ -470,24 +465,22 @@ class bus:
 
         Returns
         -------
-        route_coords : A dictionary of shapes for bus routes. The keys
-                       are the bus route names and the values are Nx2x2
-                       numpy arrays. If X is one of these arrays, then
-                       X[i] describes a line segment such that X[i,0,:]
-                       and X[i,1,:] are the two ends of the line segment.
-                       The line segments are "dictionary sorted", i.e.
-                       sorted along their first coordinate and then their
-                       second coordinate.
+        route_stops : A dictionary of stops for bus routes. The keys
+                      are the bus route names and the values are lists
+                      of [lat,long] pairs.
         '''
         if filename is None:
             filename = os.path.join(os.path.dirname(__file__),
                                     '../data/CTABusStops.json')
 
         try:
-
+            # Try to load the JSON file, this should be the only
+            # file source controlled in git
+            # JSON file was 1/50th the size of the KML file
             with open(filename, 'r') as f:
                 return json.load(f)
         except IOError:
+            # If it's not there, parse the KML file.
             filename = filename[:-4] + 'kml'
 
             with open(filename, 'r') as f:
@@ -514,6 +507,7 @@ class bus:
                                 curr_num = ''
 
                     coords = self.__parse_coords(stop.Point.coordinates.text)
+                    coords = coords.tolist() # don't want these as numpy array
 
                     for route in routes:
                         if route in route_stops.keys():
