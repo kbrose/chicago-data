@@ -9,8 +9,12 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 import os
-import pykml.parser
 import json
+try:
+    import pykml.parser
+    pykml_installed = True
+except ImportError:
+    pykml_installed = False
 
 class bus:
     """
@@ -394,13 +398,16 @@ class bus:
     def shapes(self, filename=None):
         '''
         Returns a set of shapes (i.e. list of (lat,lon) coordinate pairs)
-        describing the bus routes. The expected input is a KML file with a
-        similar structure as ../data/CTABusRoutes.kml
+        describing the bus routes. The expected input is a JSON file with
+        a similar structure as ../data/CTABusRoutes.json. The code used
+        to retrieve the information from the initial KML file is left in
+        the function in case it needs to be re-run, but should not be
+        used in general.
 
         Parameters
         ----------
         filename : path to the .kml file that should be parsed.
-                   DEFAULT: ../data/CTABusRoutes.kml
+                   DEFAULT: ../data/CTABusRoutes.json.
 
         Returns
         -------
@@ -415,38 +422,54 @@ class bus:
         '''
         if filename is None:
             filename = os.path.join(os.path.dirname(__file__),
-                                    '../data/CTABusRoutes.kml')
+                                    '../data/CTABusRoutes.json')
+        try:
+            # Try to load the JSON file, prefered over the KML
+            # file because this does not depend on a package
+            # outside of the built-in python packages.
+            with open(filename, 'r') as f:
+                return {k: np.array(v) for k, v in json.load(f).iteritems()}
+        except IOError:
+            if not pykml_installed:
+                print('Warning! JSON file not found and pykml is not installed!')
+                return None
 
-        with open(filename, 'r') as f:
-            root = pykml.parser.fromstring(f.read())
+            # If JSON file is not there, parse the KML file.
+            filename = filename[:-4] + 'kml'
+            try:
+                with open(filename, 'r') as f:
+                    root = pykml.parser.fromstring(f.read())
+            except IOError:
+                print('Warning! JSON file and KML files not found')
+                return None
 
-        route_coords = {}
-        for route in root.Document.Folder.iterchildren():
-            if 'Placemark' in route.tag:
-                name = str(route.name)
-                line_strings = route.MultiGeometry.getchildren()
-                coords = [l.coordinates.text for l in line_strings]
+            route_coords = {}
+            for route in root.Document.Folder.iterchildren():
+                if 'Placemark' in route.tag:
+                    name = str(route.name)
+                    line_strings = route.MultiGeometry.getchildren()
+                    coords = [l.coordinates.text for l in line_strings]
 
-                # Convert string to numpy array
-                coords = map(lambda x: self.__parse_coords(x), coords)
+                    # Convert string to numpy array
+                    coords = map(lambda x: self.__parse_coords(x), coords)
 
-                # Change from lists of points to lists of line segments
-                # i.e., pairs of consecutive points
-                for i, arr in enumerate(coords):
-                    coords[i] = [np.array(arr[j:j+2,:]) for j in range(len(arr)-1)]
+                    # Change from lists of points to lists of line segments
+                    # i.e., pairs of consecutive points
+                    for i, arr in enumerate(coords):
+                        coords[i] = [np.array(arr[j:j+2,:]) for j in range(len(arr)-1)]
 
-                # Flatten the list of line segments
-                coords = np.array([item for sublist in coords for item in sublist])
+                    # Flatten the list of line segments
+                    coords = np.array([item for sublist in coords for item in sublist])
 
-                # do a dictionary sort on the coordinates
-                # facilitates removal of duplicates later.
-                for i in range(len(coords)):
-                    if coords[i][0,0] < coords[i][1,0]:
-                        continue
-                    if coords[i][0,0] > coords[i][1,0] or coords[i][0,1] > coords[i][1,1]:
-                        coords[i] = np.flipud(coords[i])
+                    # do a dictionary sort on the coordinates
+                    # facilitates removal of duplicates later.
+                    for i in range(len(coords)):
+                        if coords[i][0,0] < coords[i][1,0]:
+                            continue
+                        if coords[i][0,0] > coords[i][1,0] or coords[i][0,1] > coords[i][1,1]:
+                            coords[i] = np.flipud(coords[i])
 
-                route_coords[name] = coords
+                    route_coords[name] = coords
 
         return route_coords
 
@@ -455,19 +478,21 @@ class bus:
         '''
         Returns a set of shapes (i.e. list of (lat,lon) coordinate pairs)
         describing bus stop locations. The expected input is a JSON file
-        with a similar structure as ../data/CTABusStops.json. A KML file
-        can also work.
+        with a similar structure as ../data/CTABusStops.json. The code
+        used to retrieve the information from the initial KML file
+        is left in the function in case it needs to be re-run, but
+        should not be used in general.
 
         Parameters
         ----------
         filename : path to the .kml file that should be parsed.
-                   DEFAULT: ../data/CTABusRoutes.kml
+                   DEFAULT: ../data/CTABusRoutes.json
 
         Returns
         -------
         route_stops : A dictionary of stops for bus routes. The keys
-                      are the bus route names and the values are lists
-                      of [lat,long] pairs.
+                      are the bus route names and the values are
+                      Nx2 numpy arrays of [lat,long] pairs.
         '''
         if filename is None:
             filename = os.path.join(os.path.dirname(__file__),
@@ -478,13 +503,21 @@ class bus:
             # file source controlled in git
             # JSON file was 1/50th the size of the KML file
             with open(filename, 'r') as f:
-                return json.load(f)
+                return {k: np.array(v) for k, v in json.load(f).iteritems()}
         except IOError:
-            # If it's not there, parse the KML file.
+            if not pykml_installed:
+                print('Warning! JSON file not found and pykml is not installed!')
+                return None
+
+            # If JSON file is not there, parse the KML file.
             filename = filename[:-4] + 'kml'
 
-            with open(filename, 'r') as f:
-                root = pykml.parser.fromstring(f.read())
+            try:
+                with open(filename, 'r') as f:
+                    root = pykml.parser.fromstring(f.read())
+            except IOError:
+                print('Warning! JSON file and KML files not found')
+                return None
 
             route_stops = {}
             for stop in root.Document.Folder.iterchildren():
@@ -514,7 +547,7 @@ class bus:
                             route_stops[route].append(coords)
                         else:
                             route_stops[route] = [coords]
-            return route_stops
+            return {k: np.array(v) for k, v in route_stops.iteritems()}
 
 
     @staticmethod
