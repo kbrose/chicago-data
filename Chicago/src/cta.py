@@ -549,6 +549,75 @@ class bus:
                             route_stops[route] = [coords]
             return {k: np.array(v) for k, v in route_stops.iteritems()}
 
+    @staticmethod
+    def lat_long_dist(x, y, accurate=False, metric='euclidean'):
+        """
+        Computes the distance between two (lat,long) coordinates.
+
+        Parameters
+        ----------
+        x        : lat/long pair number 1, in decimal degrees
+        y        : lat/long pair number 2, in decimal degrees
+        accurate : True to use a highly accurate calculation
+                   of the distance between the two points.
+                   If accurate is False, then the mercador
+                   projection will be used. You can expect
+                   a relative error of about 0.5%.
+        metric   : The distance metric to use. Can be either
+                   'euclidean' or 'manhattan', the latter is
+                   only valid if accurate=False.
+
+        Returns
+        -------
+        d : the distance between x and y in meters
+
+        Sources
+        -------
+        [1] http://www.movable-type.co.uk/scripts/latlong.html
+        [2] https://en.wikipedia.org/wiki/Earth_radius
+
+        ToDo
+        ----
+        Compute the manhattan distance in the accurate version.
+        Should probably complete in this order:
+            1. Find the rectangle assuming Earth is a sphere
+            2. Find the rectangle assuming Earth is ellipsoid
+        With 2 being much harder than 1 (probably).
+        """
+
+        if accurate:
+            if not metric == 'euclidean':
+                raise ValueError('Invalid metric argument with accurate=True')
+            phi1  = x[0] * np.pi / 180.0
+            phi2  = y[0] * np.pi / 180.0
+            delta_phi    = phi2 - phi1
+            delta_lambda = (y[1] - x[1]) * np.pi / 180.0
+
+            eq_rad = 6378137.0 # radius at equator in meters
+            pol_rad = 6356752.3 # radius at poles in meters
+            R = np.sqrt(
+            ((eq_rad**2 * np.cos(phi1))**2 + (pol_rad**2 * np.sin(phi1))**2) /
+            ((eq_rad * np.cos(phi1))**2 + (pol_rad * np.sin(phi1))**2))
+            # R is the radius of the eart at latitude phi1
+
+            a = np.sin(delta_phi)**2.0 + \
+                np.cos(phi1) * np.cos(phi2) * np.sin(delta_lambda) ** 2.0
+
+            c = np.arctan2(a ** .5, (1 - a)**.5)
+
+            d = R * c
+        else:
+            delta_lat = (y[0] - x[0]) * 110574
+            delta_lon = (y[1] - x[1]) * 111320 * np.cos(x[0])
+
+            if metric == 'euclidean':
+                d = np.sqrt(delta_lat**2 + delta_lon**2)
+            elif metric == 'manhattan':
+                d = abs(delta_lat) + abs(delta_lon)
+            else:
+                raise ValueError('Unknown distance metric')
+
+        return d
 
     @staticmethod
     def __parse_coords(coords_text):
