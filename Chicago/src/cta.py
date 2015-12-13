@@ -549,75 +549,36 @@ class bus:
                             route_stops[route] = [coords]
             return {k: np.array(v) for k, v in route_stops.iteritems()}
 
-    @staticmethod
-    def lat_long_dist(x, y, accurate=False, metric='euclidean'):
+    def routes_within_dist(self, d, routes=None):
         """
-        Computes the distance between two (lat,long) coordinates.
+        Returns all routes that are within the distance d.
+
+        The distance between two routes is defined as the
+        minimum distance between any two pairs of stops.
 
         Parameters
         ----------
-        x        : lat/long pair number 1, in decimal degrees
-        y        : lat/long pair number 2, in decimal degrees
-        accurate : True to use a highly accurate calculation
-                   of the distance between the two points.
-                   If accurate is False, then the mercador
-                   projection will be used. You can expect
-                   a relative error of about 0.5%.
-        metric   : The distance metric to use. Can be either
-                   'euclidean' or 'manhattan', the latter is
-                   only valid if accurate=False.
+        d     :  The minimum distance allowed between stops, in meters
+        routes : If not None, then only routes within distance d
+                 of the specified routes will be returned. If left
+                 as None, then all routes will be calculated.
 
         Returns
         -------
-        d : the distance between x and y in meters
-
-        Sources
-        -------
-        [1] http://www.movable-type.co.uk/scripts/latlong.html
-        [2] https://en.wikipedia.org/wiki/Earth_radius
-
-        ToDo
-        ----
-        Compute the manhattan distance in the accurate version.
-        Should probably complete in this order:
-            1. Find the rectangle assuming Earth is a sphere
-            2. Find the rectangle assuming Earth is ellipsoid
-        With 2 being much harder than 1 (probably).
+        within_dist : within_dist is a dict such that if r2 is in
+                      within_dist[r1], then r2 is within distance
+                      d of r1.
         """
-
-        if accurate:
-            if not metric == 'euclidean':
-                raise ValueError('Invalid metric argument with accurate=True')
-            phi1  = x[0] * np.pi / 180.0
-            phi2  = y[0] * np.pi / 180.0
-            delta_phi    = phi2 - phi1
-            delta_lambda = (y[1] - x[1]) * np.pi / 180.0
-
-            eq_rad = 6378137.0 # radius at equator in meters
-            pol_rad = 6356752.3 # radius at poles in meters
-            R = np.sqrt(
-            ((eq_rad**2 * np.cos(phi1))**2 + (pol_rad**2 * np.sin(phi1))**2) /
-            ((eq_rad * np.cos(phi1))**2 + (pol_rad * np.sin(phi1))**2))
-            # R is the radius of the eart at latitude phi1
-
-            a = np.sin(delta_phi)**2.0 + \
-                np.cos(phi1) * np.cos(phi2) * np.sin(delta_lambda) ** 2.0
-
-            c = np.arctan2(a ** .5, (1 - a)**.5)
-
-            d = R * c
-        else:
-            delta_lat = (y[0] - x[0]) * 110574
-            delta_lon = (y[1] - x[1]) * 111320 * np.cos(x[0])
-
-            if metric == 'euclidean':
-                d = np.sqrt(delta_lat**2 + delta_lon**2)
-            elif metric == 'manhattan':
-                d = abs(delta_lat) + abs(delta_lon)
-            else:
-                raise ValueError('Unknown distance metric')
-
-        return d
+        if routes is None:
+            routes = self.routes()
+        within_dist = dict()
+        for route in routes:
+            # only need to compute for routes after current position
+            # 1. Create bounding boxes
+            # 2. Test for distance between boxes of < d
+            # 3. If they pass that test, dig deeper
+            1
+        return 0
 
     @staticmethod
     def __parse_coords(coords_text):
@@ -629,7 +590,7 @@ class bus:
     @staticmethod
     def __read_bus_data(filename):
         data = pd.read_csv(filename)
-        data['date'] = utils.date_lookup(data['date'])
+        data['date'] = date_lookup(data['date'])
         daytypes = data.drop_duplicates(subset='date')[['date', 'daytype']]
         daytypes = daytypes.set_index('date')
         data = data.pivot(index='date', columns='route', values='rides')
@@ -896,7 +857,7 @@ class train:
     @staticmethod
     def __read_train_data(filename):
         data = pd.read_csv(filename)
-        data['date'] = utils.date_lookup(data['date'])
+        data['date'] = date_lookup(data['date'])
 
         # Combine the ID and station-name fields into one column
         ids = data['station_id'].map(lambda x: str(x))
@@ -931,21 +892,113 @@ class train:
 
         return data
 
-class utils:
+
+
+# Utility Functions
+
+def date_lookup(s):
     """
-    Class containing all utility functions used by transit classes.
+    This is an extremely fast approach to datetime parsing.
+    For large data, the same dates are often repeated. Rather than
+    re-parse these, we store all unique dates, parse them, and
+    use a lookup to convert all dates.
+
+    Thanks to fixxxer, found at
+    http://stackoverflow.com/questions/29882573
+    """
+    dates = {date:pd.to_datetime(date) for date in s.unique()}
+    return s.apply(lambda v: dates[v])
+
+def lat_long_dist(x, y, accurate=False, metric='euclidean'):
+    """
+    Computes the distance between two (lat,long) coordinates.
+
+    Parameters
+    ----------
+    x        : lat/long pair number 1, in decimal degrees
+    y        : lat/long pair number 2, in decimal degrees
+    accurate : True to use a highly accurate calculation
+               of the distance between the two points.
+               If accurate is False, then the mercador
+               projection will be used. You can expect
+               a relative error of about 0.5%.
+    metric   : The distance metric to use. Can be either
+               'euclidean' or 'manhattan', the latter is
+               only valid if accurate=False.
+
+    Returns
+    -------
+    d : the distance between x and y in meters
+
+    Sources
+    -------
+    [1] http://www.movable-type.co.uk/scripts/latlong.html
+    [2] https://en.wikipedia.org/wiki/Earth_radius
+
+    ToDo
+    ----
+    Compute the manhattan distance in the accurate version.
+    Should probably complete in this order:
+        1. Find the rectangle assuming Earth is a sphere
+        2. Find the rectangle assuming Earth is ellipsoid
+    With 2 being much harder than 1 (probably).
     """
 
-    @staticmethod
-    def date_lookup(s):
-        """
-        This is an extremely fast approach to datetime parsing.
-        For large data, the same dates are often repeated. Rather than
-        re-parse these, we store all unique dates, parse them, and
-        use a lookup to convert all dates.
+    if accurate:
+        if not metric == 'euclidean':
+            raise ValueError('Invalid metric argument with accurate=True')
+        phi1  = x[0] * np.pi / 180.0
+        phi2  = y[0] * np.pi / 180.0
+        delta_phi    = phi2 - phi1
+        delta_lambda = (y[1] - x[1]) * np.pi / 180.0
 
-        Thanks to fixxxer, found at
-        http://stackoverflow.com/questions/29882573
-        """
-        dates = {date:pd.to_datetime(date) for date in s.unique()}
-        return s.apply(lambda v: dates[v])
+        eq_rad = 6378137.0 # radius at equator in meters
+        pol_rad = 6356752.3 # radius at poles in meters
+        R = np.sqrt(
+        ((eq_rad**2 * np.cos(phi1))**2 + (pol_rad**2 * np.sin(phi1))**2) /
+        ((eq_rad * np.cos(phi1))**2 + (pol_rad * np.sin(phi1))**2))
+        # R is the radius of the eart at latitude phi1
+
+        a = np.sin(delta_phi)**2.0 + \
+            np.cos(phi1) * np.cos(phi2) * np.sin(delta_lambda) ** 2.0
+
+        c = np.arctan2(a ** .5, (1 - a)**.5)
+
+        d = R * c
+    else:
+        delta_lat = (y[0] - x[0]) * 110574.0
+        delta_lon = (y[1] - x[1]) * 111320.0 * np.cos(x[0])
+
+        if metric == 'euclidean':
+            d = np.sqrt(delta_lat**2 + delta_lon**2)
+        elif metric == 'manhattan':
+            d = abs(delta_lat) + abs(delta_lon)
+        else:
+            raise ValueError('Unknown distance metric')
+
+    return d
+
+def mercador_projection(lat_longs):
+    """
+    Compute the meracor projection of the Nx2 matrix lat_longs
+
+    Parameters
+    ----------
+    lat_longs : Nx2 matrix of (lat,long) pairs
+
+    Returns
+    -------
+    projected : Nx2 matrix of cartesian coordinates in
+                the mercador projection. Units are meters.
+    """
+    lat_longs = np.array(lat_longs)
+
+    mean_phi = np.mean(lat_longs[:,0])
+
+    print(mean_phi)
+
+    lat_longs[:,0] = lat_longs[:,0] * 110574.0
+    lat_longs[:,1] = lat_longs[:,1] * 111320.0 * np.cos(mean_phi)
+
+    return lat_longs
+
