@@ -10,6 +10,8 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import os
 import json
+import itertools
+import math
 try:
     import pykml.parser
     pykml_installed = True
@@ -476,7 +478,7 @@ class bus:
 
     def stops(self, filename=None):
         '''
-        Returns a set of shapes (i.e. list of (lat,lon) coordinate pairs)
+        Returns a dict of shapes (i.e. list of (lat,lon) coordinate pairs)
         describing bus stop locations. The expected input is a JSON file
         with a similar structure as ../data/CTABusStops.json. The code
         used to retrieve the information from the initial KML file
@@ -571,14 +573,56 @@ class bus:
         """
         if routes is None:
             routes = self.routes()
-        within_dist = dict()
-        for route in routes:
+            default_routes = True
+        else:
+            default_routes = False
+        if not type(routes) is list:
+            routes = [routes]
+        routes = map(lambda x: str(x).upper(), routes)
+
+        stops = self.stops()
+
+        all_routes = self.routes()
+        all_routes = [x for x in all_routes if x in stops.keys()]
+
+        bounding_boxes = dict()
+        for route in all_routes:
+            min_lat = np.min(stops[route][:,0])
+            max_lat = np.max(stops[route][:,0])
+            min_lon = np.min(stops[route][:,1])
+            max_lon = np.max(stops[route][:,1])
+            bounding_boxes[route] = mercador_projection(np.array(
+                [[min_lat, min_lon],[max_lat, max_lon]]))
+
+        within_dist = {k: [] for k in routes}
+        already_checked = {k: [] for k in stops.keys()}
+        for route1 in routes:
             # only need to compute for routes after current position
             # 1. Create bounding boxes
             # 2. Test for distance between boxes of < d
             # 3. If they pass that test, dig deeper
-            1
-        return 0
+            if route1 not in stops.keys():
+                if not default_routes:
+                    print('Warning! route "' + route1 + '" has no stop locations')
+                continue
+            for route2 in all_routes:
+                if route1 in already_checked[route2]:
+                    # If it is within the distance, we will have already added it
+                    continue
+                already_checked[route2].append(route1)
+                box_dist = box_distance(bounding_boxes[route1], bounding_boxes[route2])
+
+                if box_dist < 1.1 * d: # fudge factor, adjust for projection errors
+                    curr_dist = np.inf
+                    for pair in itertools.product(stops[route1].tolist(),
+                                                  stops[route2].tolist()):
+                        curr_dist = min(curr_dist,
+                                        lat_long_dist(pair[0], pair[1], accurate=True))
+                        if curr_dist < d:
+                            within_dist[route1].append(route2)
+                            within_dist[route2].append(route1)
+                            continue
+        return within_dist
 
     @staticmethod
     def __parse_coords(coords_text):
@@ -995,10 +1039,57 @@ def mercador_projection(lat_longs):
 
     mean_phi = np.mean(lat_longs[:,0])
 
-    print(mean_phi)
-
     lat_longs[:,0] = lat_longs[:,0] * 110574.0
     lat_longs[:,1] = lat_longs[:,1] * 111320.0 * np.cos(mean_phi)
 
     return lat_longs
 
+def box_distance(box1, box2):
+    """
+    Computes the minimum distance between two boxes, i.e.
+    rectangles whose sides are parallel to the x-y axes.
+
+    Parameters
+    ----------
+    box1 : 2x2 array of coordinates of the first rectangle
+           Should be the lower left and upper right coord
+    box2 : 2x2 array of coordinates of the second rectangle
+           Should be the lower left and upper right coord
+
+    Returns
+    -------
+    dist : The minimum distance between the boxes
+    """
+    x1 = box1[0,0]
+    y1 = box1[0,1]
+    x1b = box1[1,0]
+    y1b = box1[1,1]
+
+    x2 = box2[0,0]
+    y2 = box2[0,1]
+    x2b = box2[1,0]
+    y2b = box2[1,1]
+
+    # See http://stackoverflow.com/questions/4978323
+    left = x2b < x1
+    right = x1b < x2
+    bottom = y2b < y1
+    top = y1b < y2
+    if top and left:
+        return np.sqrt((x1 - x2b) ** 2 + (y1b - y2) ** 2)
+    elif left and bottom:
+        return np.sqrt((x1 - x2b) ** 2 + (y1 - y2b) ** 2)
+    elif bottom and right:
+        return np.sqrt((x1b - x2) ** 2 + (y1 - y2b) ** 2)
+    elif right and top:
+        return np.sqrt((x1b - x2) ** 2 + (y1b - y2) ** 2)
+    elif left:
+        return x1 - x2b
+    elif right:
+        return x2 - x1b
+    elif bottom:
+        return y1 - y2b
+    elif top:
+        return y2 - y1b
+    else: # rectangles overlap
+        return 0
