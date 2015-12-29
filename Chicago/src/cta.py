@@ -11,7 +11,6 @@ import pandas as pd
 import os
 import json
 import itertools
-import math
 try:
     import pykml.parser
     pykml_installed = True
@@ -620,8 +619,9 @@ class bus:
                                         lat_long_dist(pair[0], pair[1], accurate=True))
                         if curr_dist < d:
                             within_dist[route1].append(route2)
-                            within_dist[route2].append(route1)
-                            continue
+                            if route2 in routes:
+                                within_dist[route2].append(route1)
+                            break
         return within_dist
 
     @staticmethod
@@ -1022,13 +1022,17 @@ def lat_long_dist(x, y, accurate=False, metric='euclidean'):
 
     return d
 
-def mercador_projection(lat_longs):
+def mercador_projection(lat_longs, phi=0.730191653):
     """
     Compute the meracor projection of the Nx2 matrix lat_longs
 
     Parameters
     ----------
     lat_longs : Nx2 matrix of (lat,long) pairs
+    phi       : The central latitude for the projection,
+                in radians.
+                DEFAULT: 0.730191653, the latitude of Chicago
+
 
     Returns
     -------
@@ -1037,10 +1041,8 @@ def mercador_projection(lat_longs):
     """
     lat_longs = np.array(lat_longs)
 
-    mean_phi = np.mean(lat_longs[:,0])
-
     lat_longs[:,0] = lat_longs[:,0] * 110574.0
-    lat_longs[:,1] = lat_longs[:,1] * 111320.0 * np.cos(mean_phi)
+    lat_longs[:,1] = lat_longs[:,1] * 111320.0 * np.cos(phi)
 
     return lat_longs
 
