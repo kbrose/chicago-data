@@ -52,7 +52,8 @@ class bus:
     unforeseen events".
 
     The data was downloaded as a CSV from
-    https://data.cityofchicago.org/Transportation/CTA-Ridership-Bus-Routes-Daily-Totals-by-Route/jyb9-n7fm
+    https://data.cityofchicago.org/
+    specifically, the CTA-Ridership-Bus-Routes-Daily-Totals-by-Route dataset.
 
     Of note, the data-viewer available at the supplied link seems to indicate
     that no routes have 0 ridership for any day (although quite a few have
@@ -97,6 +98,9 @@ class bus:
         Returns a condensed version of an Nx2x2 array in the format
         of the values returned by shapes. The condensed version
         is a list of Nx2 arrays describing a path as (lat, long) pairs.
+    routes_within_dist
+        Returns a dict describing which routes are within a given
+        distance from each other.
 
     Examples
     --------
@@ -117,6 +121,10 @@ class bus:
     inversely proportional to mean daily ridership.
 
     >>> bus.plot_shapes(bus.routes())
+
+    Plot only the shapes of the routes within 50 meters of route 55.
+
+    >>> bus.plot_shapes(bus.routes_within_dist(50, 55)['55'])
     """
 
     def __init__(self, filename=None):
@@ -550,7 +558,7 @@ class bus:
                             route_stops[route] = [coords]
             return {k: np.array(v) for k, v in route_stops.iteritems()}
 
-    def routes_within_dist(self, d, routes=None):
+    def routes_within_dist(self, d, routes=None, accurate=False):
         """
         Returns all routes that are within the distance d.
 
@@ -559,16 +567,41 @@ class bus:
 
         Parameters
         ----------
-        d     :  The minimum distance allowed between stops, in meters
-        routes : If not None, then only routes within distance d
-                 of the specified routes will be returned. If left
-                 as None, then all routes will be calculated.
+        d        : The minimum distance allowed between stops, in meters
+        routes   : If not None, then only routes within distance d
+                   of the specified routes will be returned. If left
+                   as None, then all routes will be calculated.
+        accurate : Passed to lat_long_dist(). Setting accurate to True
+                   increases run-time by a factor of ~4.
+                   When using d=50, the majority of routes are not
+                   affected (137 of 182) by the value of accurate.
+                   accurate=False will always err on the side of
+                   inclusion.
 
         Returns
         -------
         within_dist : within_dist is a dict such that if r2 is in
                       within_dist[r1], then r2 is within distance
                       d of r1.
+
+        Notes
+        -----
+        The naive implementation of this algorithm would be to simply
+        find the minimum distance between all pairs of stops for two
+        routes, and then test if this is less than or equal to d.
+        However, this would result in a great number of pairs to check.
+        The search space is reduced by first finding a bounding box
+        for each route (i.e. the smallest rectangle such that all
+        stops are in the interior or boundary of the rectangle). We
+        can quickly find the distance between two rectangles, and
+        only if the distance between rectangles is <= d for a pair
+        of routes do we dig deeper by comparing pairs of stops.
+
+        TODO
+        ----
+        Investigate if using the reverse triangle inequality via a
+        pre-computed table of distance between pairs within routes
+        would result in any speedups.
         """
         if routes is None:
             routes = self.routes()
@@ -593,10 +626,17 @@ class bus:
             bounding_boxes[route] = mercador_projection(np.array(
                 [[min_lat, min_lon],[max_lat, max_lon]]))
 
+        # fudge factor, adjust for projection errors when creating the
+        # bounding box, only relevant when accurate is True
+        if accurate:
+            fudge_factor = 1.1
+        else:
+            fudge_factor = 1
+
         within_dist = {k: [] for k in routes}
         already_checked = {k: [] for k in stops.keys()}
         for route1 in routes:
-            # only need to compute for routes after current position
+            # Reduces the search space as follows:
             # 1. Create bounding boxes
             # 2. Test for distance between boxes of < d
             # 3. If they pass that test, dig deeper
@@ -611,13 +651,14 @@ class bus:
                 already_checked[route2].append(route1)
                 box_dist = box_distance(bounding_boxes[route1], bounding_boxes[route2])
 
-                if box_dist < 1.1 * d: # fudge factor, adjust for projection errors
+                if box_dist <= fudge_factor * d:
                     curr_dist = np.inf
                     for pair in itertools.product(stops[route1].tolist(),
                                                   stops[route2].tolist()):
                         curr_dist = min(curr_dist,
-                                        lat_long_dist(pair[0], pair[1], accurate=True))
-                        if curr_dist < d:
+                                        lat_long_dist(pair[0], pair[1],
+                                                      accurate=accurate))
+                        if curr_dist <= d:
                             within_dist[route1].append(route2)
                             if route2 in routes:
                                 within_dist[route2].append(route1)
@@ -996,7 +1037,7 @@ def lat_long_dist(x, y, accurate=False, metric='euclidean'):
         delta_phi    = phi2 - phi1
         delta_lambda = (y[1] - x[1]) * np.pi / 180.0
 
-        eq_rad = 6378137.0 # radius at equator in meters
+        eq_rad  = 6378137.0 # radius at equator in meters
         pol_rad = 6356752.3 # radius at poles in meters
         R = np.sqrt(
         ((eq_rad**2 * np.cos(phi1))**2 + (pol_rad**2 * np.sin(phi1))**2) /
@@ -1024,7 +1065,7 @@ def lat_long_dist(x, y, accurate=False, metric='euclidean'):
 
 def mercador_projection(lat_longs, phi=0.730191653):
     """
-    Compute the meracor projection of the Nx2 matrix lat_longs
+    Compute the mercador projection of the Nx2 matrix lat_longs
 
     Parameters
     ----------
