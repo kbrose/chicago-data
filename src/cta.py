@@ -214,6 +214,8 @@ class bus:
         else:
             data[routes].plot(ax=ax)
 
+        plt.show()
+
         return ax
 
     def plot_fft(self, routes, ax=None):
@@ -262,6 +264,8 @@ class bus:
 
         plt.legend(legend_labels)
         ax.hold(hold)
+
+        plt.show()
 
         return ax
 
@@ -326,6 +330,9 @@ class bus:
 
         ax.set_aspect('equal', 'datalim')
         ax.set_axis_bgcolor((0,0,0))
+
+        plt.show()
+
         return ax
 
     def routes(self):
