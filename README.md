@@ -6,7 +6,7 @@ Most of the focus thus far has been on tools for investigating bus ridership. Th
 
 ## Installation
 
-Download or clone this repository. You will need several python libraries: pandas, numpy, matplotlib, and pykml (if you think I am missing a dependency please let me know!).
+Download or clone this repository. You will need several python libraries: pandas, numpy, matplotlib, and optionally pykml to do geographic processes (if you think I am missing a dependency please let me know!).
 
 ## Examples
 
@@ -44,7 +44,7 @@ plt.ylim([0, plt.ylim()[1]])
 
 The output should look something like
 
-![](https://raw.githubusercontent.com/kbrose/dataViz/master/Chicago/imgs/yearly_ridership.png)
+![](https://raw.githubusercontent.com/kbrose/chicago-data/master/imgs/yearly_ridership.png)
 
 ### Geographic Routes
 You can plot the routes in geographic coordinates (latitude/longitude (x,y) pairs), and additionally make the routes more opaque/more transparent based on average ridership:
@@ -54,7 +54,7 @@ You can plot the routes in geographic coordinates (latitude/longitude (x,y) pair
 bus.plot_route_shapes(bus.routes())
 ```
 
-![](https://raw.githubusercontent.com/kbrose/dataViz/master/Chicago/imgs/routes.png)
+![](https://raw.githubusercontent.com/kbrose/chicago-data/master/imgs/routes.png)
 
 ### Daily Ridership for a few routes
 Daily ridership for different routes can be plotted easily as well:
@@ -66,7 +66,7 @@ bus.plot_routes([2, '6', 28, 'x28', 'J14'],fillzero=True)
 
 We can zoom in on just a couple months:
 
-![](https://raw.githubusercontent.com/kbrose/dataViz/master/Chicago/imgs/nov_dec_ridership.png)
+![](https://raw.githubusercontent.com/kbrose/chicago-data/master/imgs/nov_dec_ridership.png)
 
 ### The Fast Fourier Transform
 The Fast Fourier Transform ([FFT](https://en.wikipedia.org/wiki/Fast_Fourier_transform)) can be plotted for individual routes in a similar fashion:
@@ -77,11 +77,21 @@ bus.plot_fft(48)
 
 which results in
 
-![](https://raw.githubusercontent.com/kbrose/dataViz/master/Chicago/imgs/fft.png)
+![](https://raw.githubusercontent.com/kbrose/chicago-data/master/imgs/fft.png)
 
 (Note that 1/7 = 0.14285..., 2/7 = 0.2857..., and 3/7 = 0.4285....)
 
 The FFT is normalized so that it sums to 1. The hope is that this allows for meaningful comparison between the FFT of different routes, so that a route with higher overall variance would not dominate over a route with smaller variance.
+
+### Distance Between Routes
+The distance between two bus routes is defined as the shortest distance between any two bus-stops along each of the routes. For a given route, the list of all routes that are within some specified distance of `d` meters can be found. To see what routes arise, we can plot those routes that are within the distance.
+
+```python
+within_dist = bus.routes_within_dist(d=50,routes=146,accurate=False)
+bus.plot_shapes(bus.routes_within_dist(50, 146, False)['146'])
+```
+
+You can specify multiple routes, or none (which will default to finding all routes within the specified distance for all other routes). The `accurate` flag effects how distance is computed. If `accurate` is set to false, then distance will be computed as the typical (Euclidean) distance on the [Mercator Projection](https://en.wikipedia.org/wiki/Mercator_projection) (where the projection has been centered on Chicago), otherwise it will use a more complicated, but more accurate, formula (see [here](http://www.movable-type.co.uk/scripts/latlong.html) for the distance formula given in terms of the Earth's radius, and [here](https://en.wikipedia.org/wiki/Earth_radius) for the equation of the Earth's radius at a given latitude). It appears as if setting `accurate` to False results in a speed-up of about 4X, but does have noticeable changes in results for some routes.
 
 ## Data Source(s)
 
