@@ -25,7 +25,7 @@ class bus:
     data pertaining to bus rides broken down by day and route.
 
     Do this first
-    ----------------------------
+    -------------
     This documentation assumes you have imported and loaded up the
     objects by calling
 
@@ -630,7 +630,7 @@ class bus:
             max_lat = np.max(stops[route][:,0])
             min_lon = np.min(stops[route][:,1])
             max_lon = np.max(stops[route][:,1])
-            bounding_boxes[route] = mercador_projection(np.array(
+            bounding_boxes[route] = mercator_projection(np.array(
                 [[min_lat, min_lon],[max_lat, max_lon]]))
 
         # fudge factor, adjust for projection errors when creating the
@@ -1011,7 +1011,7 @@ def lat_long_dist(x, y, accurate=False, metric='euclidean'):
     y        : lat/long pair number 2, in decimal degrees
     accurate : True to use a highly accurate calculation
                of the distance between the two points.
-               If accurate is False, then the mercador
+               If accurate is False, then the mercator
                projection will be used. You can expect
                a relative error of about 0.5%.
     metric   : The distance metric to use. Can be either
@@ -1070,9 +1070,9 @@ def lat_long_dist(x, y, accurate=False, metric='euclidean'):
 
     return d
 
-def mercador_projection(lat_longs, phi=0.730191653):
+def mercator_projection(lat_longs, phi=0.730191653):
     """
-    Compute the mercador projection of the Nx2 matrix lat_longs
+    Compute the mercator projection of the Nx2 matrix lat_longs
 
     Parameters
     ----------
@@ -1085,7 +1085,7 @@ def mercador_projection(lat_longs, phi=0.730191653):
     Returns
     -------
     projected : Nx2 matrix of cartesian coordinates in
-                the mercador projection. Units are meters.
+                the mercator projection. Units are meters.
     """
     lat_longs = np.array(lat_longs)
 
